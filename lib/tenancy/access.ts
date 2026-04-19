@@ -16,6 +16,11 @@ export type OrganizationMembershipSummary = {
 
 const CLIENT_MUTATION_ROLES = new Set<OrganizationRole>(["admin", "operator"]);
 const PAY_RUN_MUTATION_ROLES = new Set<OrganizationRole>(["admin", "operator"]);
+const REVIEW_MUTATION_ROLES = new Set<OrganizationRole>([
+  "admin",
+  "operator",
+  "reviewer",
+]);
 
 export function canManageClients(role: OrganizationRole) {
   return CLIENT_MUTATION_ROLES.has(role);
@@ -23,6 +28,10 @@ export function canManageClients(role: OrganizationRole) {
 
 export function canManagePayRuns(role: OrganizationRole) {
   return PAY_RUN_MUTATION_ROLES.has(role);
+}
+
+export function canManageReviewExceptions(role: OrganizationRole) {
+  return REVIEW_MUTATION_ROLES.has(role);
 }
 
 export function assertCanManageClients(role: OrganizationRole) {
@@ -34,6 +43,12 @@ export function assertCanManageClients(role: OrganizationRole) {
 export function assertCanManagePayRuns(role: OrganizationRole) {
   if (!canManagePayRuns(role)) {
     throw new Error("Pay run management is not permitted for this role.");
+  }
+}
+
+export function assertCanManageReviewExceptions(role: OrganizationRole) {
+  if (!canManageReviewExceptions(role)) {
+    throw new Error("Review exception changes are not permitted for this role.");
   }
 }
 

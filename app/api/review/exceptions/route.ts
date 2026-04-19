@@ -1,0 +1,130 @@
+import { NextRequest } from "next/server";
+import { z } from "zod";
+
+import { requireAuthenticatedUser } from "@/lib/auth/session";
+import {
+  bulkSetReviewExceptionStatus,
+  listReviewExceptions,
+} from "@/lib/review/exceptions";
+import { canManageReviewExceptions } from "@/lib/tenancy/access";
+import { findOrganizationContextForUser } from "@/lib/tenancy/service";
+
+const bulkUpdateSchema = z.object({
+  action: z.enum(["ignore", "resolve"]),
+  clientId: z.string().trim().min(1),
+  exceptionIds: z.array(z.string().trim().min(1)).min(1),
+  note: z.string().trim().max(1_000).optional(),
+  orgSlug: z.string().trim().min(1),
+  payRunId: z.string().trim().min(1),
+});
+
+const severitySchema = z.enum(["blocker", "info", "warning"]);
+const statusSchema = z.enum(["dismissed", "in_review", "open", "resolved"]);
+
+export async function GET(request: NextRequest) {
+  const user = await requireAuthenticatedUser();
+  const { searchParams } = new URL(request.url);
+  const orgSlug = searchParams.get("orgSlug")?.trim();
+  const clientId = searchParams.get("clientId")?.trim();
+  const payRunId = searchParams.get("payRunId")?.trim();
+  const severityValue = searchParams.get("severity")?.trim();
+  const statusValue = searchParams.get("status")?.trim();
+
+  if (!orgSlug || !clientId || !payRunId) {
+    return Response.json(
+      {
+        error: "orgSlug, clientId, and payRunId are required.",
+      },
+      {
+        status: 400,
+      },
+    );
+  }
+
+  const organizationContext = await findOrganizationContextForUser(user.id, orgSlug);
+
+  if (!organizationContext) {
+    return Response.json(
+      {
+        error: "Organization access denied.",
+      },
+      {
+        status: 403,
+      },
+    );
+  }
+
+  const exceptions = await listReviewExceptions({
+    clientId,
+    employee: searchParams.get("employee")?.trim() || undefined,
+    organizationId: organizationContext.organization.id,
+    payRunId,
+    ruleCode: searchParams.get("ruleCode")?.trim() || undefined,
+    severity: severityValue
+      ? severitySchema.safeParse(severityValue).data
+      : undefined,
+    status: statusValue ? statusSchema.safeParse(statusValue).data : undefined,
+  });
+
+  return Response.json({
+    items: exceptions,
+  });
+}
+
+export async function PATCH(request: NextRequest) {
+  const user = await requireAuthenticatedUser();
+  const parsed = bulkUpdateSchema.safeParse(await request.json());
+
+  if (!parsed.success) {
+    return Response.json(
+      {
+        error: "Bulk exception update payload was invalid.",
+      },
+      {
+        status: 400,
+      },
+    );
+  }
+
+  const organizationContext = await findOrganizationContextForUser(
+    user.id,
+    parsed.data.orgSlug,
+  );
+
+  if (!organizationContext) {
+    return Response.json(
+      {
+        error: "Organization access denied.",
+      },
+      {
+        status: 403,
+      },
+    );
+  }
+
+  if (!canManageReviewExceptions(organizationContext.role)) {
+    return Response.json(
+      {
+        error: "Your role cannot change review exceptions.",
+      },
+      {
+        status: 403,
+      },
+    );
+  }
+
+  const result = await bulkSetReviewExceptionStatus({
+    action: parsed.data.action,
+    actorUserId: user.id,
+    clientId: parsed.data.clientId,
+    exceptionIds: parsed.data.exceptionIds,
+    note: parsed.data.note,
+    organizationId: organizationContext.organization.id,
+    payRunId: parsed.data.payRunId,
+  });
+
+  return Response.json({
+    ok: true,
+    ...result,
+  });
+}

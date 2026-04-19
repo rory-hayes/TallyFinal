@@ -172,6 +172,8 @@ export async function createExceptionComment(input: {
   authorUserId: string;
   body: string;
   clientId: string;
+  commentType?: "audit_log" | "comment";
+  metadata?: Prisma.InputJsonValue | Prisma.NullableJsonNullValueInput;
   organizationId: string;
   payRunId: string;
   reviewExceptionId: string;
@@ -181,6 +183,8 @@ export async function createExceptionComment(input: {
       authorUserId: input.authorUserId,
       body: input.body,
       clientId: input.clientId,
+      commentType: input.commentType,
+      metadata: input.metadata,
       organizationId: input.organizationId,
       payRunId: input.payRunId,
       reviewExceptionId: input.reviewExceptionId,

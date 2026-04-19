@@ -77,6 +77,11 @@ enum ReviewExceptionStatus {
   dismissed
 }
 
+enum ExceptionCommentType {
+  comment
+  audit_log
+}
+
 enum ApprovalEventType {
   submitted
   approved
@@ -432,7 +437,9 @@ model ExceptionComment {
   payRunId          String
   reviewExceptionId String
   authorUserId      String
+  commentType       ExceptionCommentType @default(comment)
   body              String
+  metadata          Json?
   createdAt         DateTime        @default(now())
   organization      Organization    @relation(fields: [organizationId], references: [id], onDelete: Cascade)
   client            Client          @relation(fields: [clientId, organizationId], references: [id, organizationId], onDelete: Cascade)
