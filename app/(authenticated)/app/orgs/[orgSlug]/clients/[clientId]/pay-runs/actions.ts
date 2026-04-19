@@ -5,6 +5,10 @@ import { z } from "zod";
 
 import { requireAuthenticatedUser } from "@/lib/auth/session";
 import {
+  persistSourceFilePreview,
+  saveSourceFileMappings,
+} from "@/lib/imports/service";
+import {
   confirmSourceFileUpload,
   createPayRunForClient,
   findPayRunForClient,
@@ -241,7 +245,7 @@ export async function confirmSourceFileUploadAction(
   orgSlug: string,
   clientId: string,
   payRunId: string,
-  sourceFileId: string,
+  formData: FormData,
 ) {
   const context = await requireMutablePayRunContext(orgSlug, clientId, payRunId);
 
@@ -260,12 +264,34 @@ export async function confirmSourceFileUploadAction(
   }
 
   const payRun = context.payRun;
+  const sourceFileId = formData.get("sourceFileId");
+  const file = formData.get("file");
+
+  if (typeof sourceFileId !== "string" || !sourceFileId.trim()) {
+    return {
+      error: "Source file confirmation is missing the uploaded file reference.",
+      ok: false as const,
+    };
+  }
+
+  if (!(file instanceof File) || !file.size) {
+    return {
+      error: "Source file confirmation is missing the uploaded file contents.",
+      ok: false as const,
+    };
+  }
 
   try {
     await confirmSourceFileUpload({
       organizationId: context.organizationContext.organization.id,
       payRunId: payRun.id,
-      sourceFileId,
+      sourceFileId: sourceFileId.trim(),
+    });
+
+    const previewResult = await persistSourceFilePreview({
+      file,
+      organizationId: context.organizationContext.organization.id,
+      sourceFileId: sourceFileId.trim(),
     });
 
     revalidatePath(`/app/orgs/${orgSlug}/clients/${clientId}`);
@@ -273,6 +299,9 @@ export async function confirmSourceFileUploadAction(
     revalidatePath(`/app/orgs/${orgSlug}/clients/${clientId}/pay-runs/${payRunId}`);
 
     return {
+      notice: previewResult.ok
+        ? "Source file uploaded. Preview and mapping are ready."
+        : `Source file uploaded, but preview parsing failed: ${previewResult.error}`,
       ok: true as const,
     };
   } catch (error) {
@@ -282,4 +311,77 @@ export async function confirmSourceFileUploadAction(
       ok: false as const,
     };
   }
+}
+
+export async function saveSourceFileMappingAction(
+  orgSlug: string,
+  clientId: string,
+  payRunId: string,
+  sourceFileId: string,
+  formData: FormData,
+) {
+  const context = await requireMutablePayRunContext(orgSlug, clientId, payRunId);
+
+  if (!context.ok) {
+    return {
+      error: context.error,
+      ok: false as const,
+    };
+  }
+
+  if (!context.payRun) {
+    return {
+      error: "Pay run access denied.",
+      ok: false as const,
+    };
+  }
+
+  const importProfileKey = formData.get("importProfileKey");
+
+  if (typeof importProfileKey !== "string" || !importProfileKey.trim()) {
+    return {
+      error: "Choose an import profile before saving mappings.",
+      ok: false as const,
+    };
+  }
+
+  const values = Object.fromEntries(
+    Array.from(formData.entries())
+      .filter(([key]) => key.startsWith("mapping:"))
+      .map(([key, value]) => [
+        key.replace(/^mapping:/, ""),
+        typeof value === "string" ? value : "",
+      ]),
+  );
+
+  const result = await saveSourceFileMappings({
+    clientId: context.client.id,
+    importProfileKey: importProfileKey.trim(),
+    organizationId: context.organizationContext.organization.id,
+    saveTemplate: formData.get("saveTemplate") === "on",
+    sourceFileId,
+    userId: context.user.id,
+    values,
+  });
+
+  if (!result.ok) {
+    return {
+      error:
+        "missingFields" in result && result.missingFields?.length
+          ? `Required fields still need mappings: ${result.missingFields.join(", ")}.`
+          : result.error ?? "Mapping could not be saved.",
+      ok: false as const,
+    };
+  }
+
+  revalidatePath(`/app/orgs/${orgSlug}/clients/${clientId}`);
+  revalidatePath(`/app/orgs/${orgSlug}/clients/${clientId}/pay-runs`);
+  revalidatePath(`/app/orgs/${orgSlug}/clients/${clientId}/pay-runs/${payRunId}`);
+
+  return {
+    notice: result.templateSaved
+      ? "Mapping saved and template updated for future uploads."
+      : "Mapping saved for this upload.",
+    ok: true as const,
+  };
 }

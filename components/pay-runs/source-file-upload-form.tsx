@@ -27,6 +27,7 @@ type UploadRegistrationResult =
 
 type UploadConfirmationResult =
   | {
+      notice?: string;
       ok: true;
     }
   | {
@@ -36,7 +37,7 @@ type UploadConfirmationResult =
 
 type SourceFileUploadFormProps = {
   registerUpload: (formData: FormData) => Promise<UploadRegistrationResult>;
-  confirmUpload: (sourceFileId: string) => Promise<UploadConfirmationResult>;
+  confirmUpload: (formData: FormData) => Promise<UploadConfirmationResult>;
 };
 
 async function computeSha256(file: File) {
@@ -100,7 +101,11 @@ export function SourceFileUploadForm({
         return;
       }
 
-      const confirmation = await confirmUpload(registration.sourceFileId);
+      const confirmationFormData = new FormData();
+      confirmationFormData.set("sourceFileId", registration.sourceFileId);
+      confirmationFormData.set("file", file);
+
+      const confirmation = await confirmUpload(confirmationFormData);
 
       if (!confirmation.ok) {
         setError(confirmation.error);
@@ -108,7 +113,9 @@ export function SourceFileUploadForm({
       }
 
       formRef.current?.reset();
-      setNotice("Source file uploaded and linked to the pay run.");
+      setNotice(
+        confirmation.notice ?? "Source file uploaded and linked to the pay run.",
+      );
       router.refresh();
     } catch (submissionError) {
       setError(

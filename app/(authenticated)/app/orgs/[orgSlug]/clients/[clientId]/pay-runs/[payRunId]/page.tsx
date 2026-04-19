@@ -1,6 +1,7 @@
 import Link from "next/link";
 import { notFound, redirect } from "next/navigation";
 
+import { SourceFileMappingForm } from "@/components/pay-runs/source-file-mapping-form";
 import { SourceFileUploadForm } from "@/components/pay-runs/source-file-upload-form";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
@@ -21,6 +22,7 @@ import {
 } from "@/components/ui/table";
 import { requireAuthenticatedUser } from "@/lib/auth/session";
 import { findClientForOrganization } from "@/lib/clients/service";
+import { listImportWorkspacesForPayRun } from "@/lib/imports/service";
 import {
   findPayRunForClient,
   listPayRunsForClient,
@@ -32,6 +34,7 @@ import { findOrganizationContextForUser } from "@/lib/tenancy/service";
 import {
   confirmSourceFileUploadAction,
   registerSourceFileUploadAction,
+  saveSourceFileMappingAction,
 } from "../actions";
 
 function formatStatus(status: string) {
@@ -88,6 +91,13 @@ export default async function PayRunDetailPage({
     organizationId: organizationContext.organization.id,
     clientId: client.id,
   });
+  const importWorkspaces = await listImportWorkspacesForPayRun({
+    organizationId: organizationContext.organization.id,
+    payRunId: payRun.id,
+  });
+  const sourceFilesById = new Map(
+    payRun.sourceFiles.map((sourceFile) => [sourceFile.id, sourceFile]),
+  );
   const payRunManagementAllowed = canManagePayRuns(organizationContext.role);
 
   return (
@@ -103,8 +113,8 @@ export default async function PayRunDetailPage({
             </Badge>
           </div>
           <p className="text-sm text-muted-foreground">
-            The pay run detail page keeps upload lineage visible before preview,
-            mapping, or payroll review logic exists.
+            Upload-first preview and mapping are live here before any canonical
+            normalization starts.
           </p>
           {resolvedSearchParams.notice ? (
             <p className="text-sm text-emerald-800">
@@ -216,6 +226,168 @@ export default async function PayRunDetailPage({
 
       <Card className="rounded-md border-border/80">
         <CardHeader>
+          <CardTitle>Preview and mapping</CardTitle>
+          <CardDescription>
+            Uploaded files are previewed first. Operators can inspect headers,
+            review sample rows, and save reusable mappings before normalization
+            exists.
+          </CardDescription>
+        </CardHeader>
+        <CardContent className="space-y-6">
+          {importWorkspaces.length ? (
+            importWorkspaces.map((workspace) => {
+              const sourceFile = sourceFilesById.get(workspace.sourceFileId);
+
+              if (!sourceFile) {
+                return null;
+              }
+
+              return (
+                <div
+                  key={workspace.sourceFileId}
+                  className="space-y-4 rounded-md border border-border/80 p-4"
+                >
+                  <div className="flex flex-wrap items-start justify-between gap-3">
+                    <div className="space-y-1">
+                      <div className="flex flex-wrap items-center gap-2">
+                        <h3 className="text-base font-semibold text-foreground">
+                          {formatSourceFileKindLabel(workspace.sourceKind)}
+                        </h3>
+                        <Badge variant="outline" className="rounded-md">
+                          v{sourceFile.version}
+                        </Badge>
+                        <Badge
+                          variant="outline"
+                          className="rounded-md capitalize"
+                        >
+                          {workspace.previewStatus}
+                        </Badge>
+                      </div>
+                      <p className="text-sm text-foreground">
+                        {sourceFile.originalFilename}
+                      </p>
+                      <p className="text-xs text-muted-foreground">
+                        {workspace.previewSheetName
+                          ? `${workspace.previewSheetName} - `
+                          : ""}
+                        {workspace.previewRowCount} data rows
+                      </p>
+                    </div>
+                    <div className="text-right text-xs text-muted-foreground">
+                      <p>{workspace.previewHeaders.length} headers</p>
+                      <p>
+                        {workspace.hasSavedMapping
+                          ? "Saved mapping on this upload"
+                          : workspace.reusedTemplateName
+                            ? "Template reused for this upload"
+                            : "No saved mapping yet"}
+                      </p>
+                    </div>
+                  </div>
+
+                  {workspace.previewStatus === "failed" ? (
+                    <div className="rounded-md border border-destructive/40 bg-destructive/5 px-4 py-3 text-sm text-destructive">
+                      {workspace.previewError ??
+                        "Preview parsing failed for this file."}
+                    </div>
+                  ) : null}
+
+                  {workspace.previewStatus === "pending" ? (
+                    <div className="rounded-md border border-dashed border-border px-4 py-3 text-sm text-muted-foreground">
+                      Preview parsing has not completed for this file yet.
+                    </div>
+                  ) : null}
+
+                  {workspace.previewStatus === "ready" ? (
+                    <>
+                      <div className="space-y-2">
+                        <p className="text-sm font-medium text-foreground">
+                          Headers
+                        </p>
+                        <div className="flex flex-wrap gap-2">
+                          {workspace.previewHeaders.map((header) => (
+                            <span
+                              key={`${workspace.sourceFileId}-${header}`}
+                              className="rounded-md border border-border/80 px-2 py-1 text-xs text-foreground"
+                            >
+                              {header}
+                            </span>
+                          ))}
+                        </div>
+                      </div>
+
+                      <div className="space-y-2">
+                        <p className="text-sm font-medium text-foreground">
+                          Sample rows
+                        </p>
+                        {workspace.previewSampleRows.length ? (
+                          <div className="overflow-x-auto rounded-md border border-border/80">
+                            <Table>
+                              <TableHeader>
+                                <TableRow>
+                                  {workspace.previewHeaders.map((header) => (
+                                    <TableHead key={`${workspace.sourceFileId}-${header}-head`}>
+                                      {header}
+                                    </TableHead>
+                                  ))}
+                                </TableRow>
+                              </TableHeader>
+                              <TableBody>
+                                {workspace.previewSampleRows.map((row, rowIndex) => (
+                                  <TableRow key={`${workspace.sourceFileId}-row-${rowIndex}`}>
+                                    {workspace.previewHeaders.map((header) => (
+                                      <TableCell
+                                        key={`${workspace.sourceFileId}-${rowIndex}-${header}`}
+                                        className="align-top text-xs"
+                                      >
+                                        {row[header] || "N/A"}
+                                      </TableCell>
+                                    ))}
+                                  </TableRow>
+                                ))}
+                              </TableBody>
+                            </Table>
+                          </div>
+                        ) : (
+                          <div className="rounded-md border border-dashed border-border px-4 py-3 text-sm text-muted-foreground">
+                            The file has headers but no sample rows to preview.
+                          </div>
+                        )}
+                      </div>
+
+                      {payRunManagementAllowed ? (
+                        <SourceFileMappingForm
+                          workspace={workspace}
+                          saveMapping={saveSourceFileMappingAction.bind(
+                            null,
+                            orgSlug,
+                            client.id,
+                            payRun.id,
+                            workspace.sourceFileId,
+                          )}
+                        />
+                      ) : (
+                        <p className="text-sm text-muted-foreground">
+                          Your role can inspect mappings but cannot save them.
+                        </p>
+                      )}
+                    </>
+                  ) : null}
+                </div>
+              );
+            })
+          ) : (
+            <div className="rounded-md border border-dashed border-border px-4 py-10 text-center">
+              <p className="text-sm text-muted-foreground">
+                Upload a file to unlock preview parsing and reusable mappings.
+              </p>
+            </div>
+          )}
+        </CardContent>
+      </Card>
+
+      <Card className="rounded-md border-border/80">
+        <CardHeader>
           <CardTitle>Source file lineage</CardTitle>
           <CardDescription>
             New uploads create new versions. Prior versions stay visible and can
@@ -256,7 +428,7 @@ export default async function PayRunDetailPage({
                               )} KB`
                             : "Size pending"}
                           {sourceFile.replacementOfId
-                            ? ` • replaces ${sourceFile.replacementOfId}`
+                            ? ` - replaces ${sourceFile.replacementOfId}`
                             : ""}
                         </p>
                       </div>
