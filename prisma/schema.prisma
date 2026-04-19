@@ -35,6 +35,12 @@ enum SourceFileStatus {
   superseded
 }
 
+enum SourceFilePreviewStatus {
+  pending
+  ready
+  failed
+}
+
 model Organization {
   id              String               @id @default(cuid())
   name            String
@@ -46,6 +52,8 @@ model Organization {
   clients         Client[]
   payRuns         PayRun[]
   sourceFiles     SourceFile[]
+  mappingTemplates MappingTemplate[]
+  sourceColumnMappings SourceColumnMapping[]
 }
 
 model OrganizationMember {
@@ -81,6 +89,7 @@ model Client {
   organization    Organization @relation(fields: [organizationId], references: [id], onDelete: Cascade)
   payRuns         PayRun[]
   sourceFiles     SourceFile[]
+  mappingTemplates MappingTemplate[]
 
   @@unique([organizationId, slug])
   @@unique([id, organizationId])
@@ -129,6 +138,13 @@ model SourceFile {
   replacementOfId  String?
   uploadedByUserId String
   uploadedAt       DateTime?
+  previewStatus    SourceFilePreviewStatus @default(pending)
+  previewSheetName String?
+  previewHeaders   Json?
+  previewSampleRows Json?
+  previewRowCount  Int?
+  previewError     String?
+  importProfileKey String?
   createdAt        DateTime         @default(now())
   updatedAt        DateTime         @updatedAt
   organization     Organization     @relation(fields: [organizationId], references: [id], onDelete: Cascade)
@@ -136,6 +152,7 @@ model SourceFile {
   payRun           PayRun           @relation(fields: [payRunId, organizationId], references: [id, organizationId], onDelete: Cascade)
   replacementOf    SourceFile?      @relation("SourceFileReplacementChain", fields: [replacementOfId], references: [id], onDelete: SetNull)
   replacements     SourceFile[]     @relation("SourceFileReplacementChain")
+  sourceColumnMappings SourceColumnMapping[]
 
   @@unique([id, payRunId])
   @@unique([payRunId, kind, version])
@@ -143,4 +160,40 @@ model SourceFile {
   @@index([organizationId, payRunId, kind])
   @@index([payRunId, status])
   @@index([replacementOfId])
+}
+
+model MappingTemplate {
+  id               String         @id @default(cuid())
+  organizationId   String
+  clientId         String
+  sourceKind       SourceFileKind
+  importProfileKey String
+  templateName     String
+  columnMappings   Json
+  sourceHeaders    Json?
+  createdByUserId  String
+  updatedByUserId  String?
+  createdAt        DateTime       @default(now())
+  updatedAt        DateTime       @updatedAt
+  archivedAt       DateTime?
+  organization     Organization   @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  client           Client         @relation(fields: [clientId, organizationId], references: [id, organizationId], onDelete: Cascade)
+
+  @@unique([organizationId, clientId, sourceKind, importProfileKey])
+  @@index([organizationId, clientId, archivedAt])
+}
+
+model SourceColumnMapping {
+  id             String       @id @default(cuid())
+  organizationId String
+  sourceFileId   String
+  targetFieldKey String
+  sourceHeader   String
+  createdAt      DateTime     @default(now())
+  updatedAt      DateTime     @updatedAt
+  organization   Organization @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  sourceFile     SourceFile   @relation(fields: [sourceFileId], references: [id], onDelete: Cascade)
+
+  @@unique([sourceFileId, targetFieldKey])
+  @@index([organizationId, sourceFileId])
 }
