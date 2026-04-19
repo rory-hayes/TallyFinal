@@ -1,25 +1,22 @@
 import Link from "next/link";
 
+import { signOutAction } from "@/lib/auth/actions";
+import { type OrganizationMembershipSummary } from "@/lib/tenancy/access";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Separator } from "@/components/ui/separator";
 
-const navigationItems = [
-  {
-    href: "/app",
-    label: "Home",
-  },
-  {
-    href: "/api/health",
-    label: "Health API",
-  },
-  {
-    href: "https://supabase.com/docs",
-    label: "Supabase Docs",
-  },
-];
+type AppShellProps = {
+  children: React.ReactNode;
+  memberships: OrganizationMembershipSummary[];
+  userEmail: string | null;
+};
 
-export function AppShell({ children }: { children: React.ReactNode }) {
+export function AppShell({
+  children,
+  memberships,
+  userEmail,
+}: AppShellProps) {
   return (
     <div className="min-h-screen bg-[linear-gradient(180deg,var(--color-canvas)_0%,var(--color-background)_28%,var(--color-background)_100%)]">
       <div className="mx-auto flex min-h-screen max-w-7xl flex-col px-4 sm:px-6 lg:px-8">
@@ -36,27 +33,27 @@ export function AppShell({ children }: { children: React.ReactNode }) {
                 variant="outline"
                 className="rounded-md border-emerald-600/25 bg-emerald-500/10 text-emerald-800"
               >
-                App baseline
+                Tenant-safe foundation
               </Badge>
             </div>
             <p className="max-w-2xl text-sm text-muted-foreground">
-              Employee-level payroll review comes later. This shell just proves
-              the stack, the shared primitives, and the infrastructure wiring.
+              Employee-level payroll review still comes later. This shell is now
+              focused on signed-in tenancy, org access, and client safety.
             </p>
           </div>
 
-          <div className="flex flex-wrap items-center gap-2">
-            {navigationItems.map((item) => (
-              <Button
-                key={item.href}
-                asChild
-                variant="outline"
-                size="sm"
-                className="rounded-md"
-              >
-                <Link href={item.href}>{item.label}</Link>
+          <div className="flex flex-wrap items-center gap-3">
+            {userEmail ? (
+              <span className="text-sm text-muted-foreground">{userEmail}</span>
+            ) : null}
+            <Button asChild variant="outline" size="sm" className="rounded-md">
+              <Link href="/api/health">Health API</Link>
+            </Button>
+            <form action={signOutAction}>
+              <Button type="submit" variant="outline" size="sm" className="rounded-md">
+                Sign out
               </Button>
-            ))}
+            </form>
           </div>
         </header>
 
@@ -65,25 +62,49 @@ export function AppShell({ children }: { children: React.ReactNode }) {
             <nav className="sticky top-8 space-y-5">
               <div className="space-y-2">
                 <p className="text-xs font-semibold uppercase text-muted-foreground">
-                  Foundation
+                  Workspace
                 </p>
                 <ul className="space-y-2 text-sm text-foreground">
-                  <li>Next.js App Router</li>
-                  <li>Tailwind CSS v4</li>
-                  <li>shadcn/ui</li>
-                  <li>TanStack Table</li>
+                  <li>
+                    <Link href="/app" className="hover:text-primary">
+                      Home
+                    </Link>
+                  </li>
+                  <li>
+                    <Link href="/app/onboarding" className="hover:text-primary">
+                      Onboarding
+                    </Link>
+                  </li>
                 </ul>
               </div>
               <Separator />
               <div className="space-y-2">
                 <p className="text-xs font-semibold uppercase text-muted-foreground">
-                  Next slices
+                  Organizations
                 </p>
-                <ul className="space-y-2 text-sm text-muted-foreground">
-                  <li>P02: tenancy foundation</li>
-                  <li>P03: pay run shell</li>
-                  <li>P04: import preview</li>
-                </ul>
+                {memberships.length ? (
+                  <ul className="space-y-2 text-sm text-muted-foreground">
+                    {memberships.map((membership) => (
+                      <li key={membership.organizationId}>
+                        <Link
+                          href={`/app/orgs/${membership.organizationSlug}`}
+                          className="block hover:text-primary"
+                        >
+                          <span className="text-foreground">
+                            {membership.organizationName}
+                          </span>
+                          <span className="ml-2 text-xs">
+                            {membership.role}
+                          </span>
+                        </Link>
+                      </li>
+                    ))}
+                  </ul>
+                ) : (
+                  <p className="text-sm text-muted-foreground">
+                    No organizations yet.
+                  </p>
+                )}
               </div>
             </nav>
           </aside>

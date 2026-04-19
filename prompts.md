@@ -315,7 +315,7 @@ At the end, provide:
 
 ---
 
-## [ ] P02 — Build auth, org, membership, and client foundation
+## [x] P02 — Build auth, org, membership, and client foundation
 **Mode:** Code
 **When to run:** after P01
 **Goal:** create tenancy and role-safe business foundations
@@ -1226,7 +1226,7 @@ Use this as your operating rhythm.
 - [ ] P01 run and reviewed
 
 ## Build sequence
-- [ ] P02
+- [x] P02
 - [ ] P03
 - [ ] P04
 - [ ] Add real fixtures manually
