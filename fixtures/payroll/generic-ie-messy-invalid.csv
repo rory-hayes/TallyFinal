@@ -1,0 +1,4 @@
+Worker Ref,Payroll Number,Full Name,Gross EUR,Take Home,Basic Salary,Shift Premium,PAYE Tax,USC Charge,EE PRSI,Employer PRSI,Team,Cost Centre
+M-001,MX100,Niamh O'Shea,3900.00,2950.00,3700.00,200.00,500.00,100.00,75.00,380.00,Ops,OPS-10
+,,Orla Brady,2750.00,,2600.00,150.00,320.00,70.00,50.00,260.00,Support,SUP-11
+M-003,MX103,Padraig Flynn,not-a-number,2100.00,2300.00,100.00,290.00,60.00,45.00,240.00,Finance,FIN-12

@@ -26,7 +26,13 @@ export const IMPORT_PROFILES: ImportProfile[] = [
         key: "employee_external_id",
         label: "Employee ID",
         description: "Stable employee identifier from the source file.",
-        required: true,
+        required: false,
+      },
+      {
+        key: "employee_number",
+        label: "Payroll number",
+        description: "Employee payroll number for deterministic secondary matching.",
+        required: false,
       },
       {
         key: "employee_name",
