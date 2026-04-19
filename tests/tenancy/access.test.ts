@@ -2,7 +2,9 @@ import { describe, expect, it } from "vitest";
 
 import {
   assertClientBelongsToOrganization,
+  assertPayRunBelongsToOrganization,
   canManageClients,
+  canManagePayRuns,
   getDefaultOrganizationMembership,
   requireOrganizationMembership,
   type OrganizationMembershipSummary,
@@ -32,6 +34,18 @@ describe("canManageClients", () => {
   it("blocks reviewers and viewers from mutating clients", () => {
     expect(canManageClients("reviewer")).toBe(false);
     expect(canManageClients("viewer")).toBe(false);
+  });
+});
+
+describe("canManagePayRuns", () => {
+  it("allows admins and operators to manage pay runs", () => {
+    expect(canManagePayRuns("admin")).toBe(true);
+    expect(canManagePayRuns("operator")).toBe(true);
+  });
+
+  it("blocks reviewers and viewers from mutating pay runs", () => {
+    expect(canManagePayRuns("reviewer")).toBe(false);
+    expect(canManagePayRuns("viewer")).toBe(false);
   });
 });
 
@@ -66,5 +80,17 @@ describe("tenant isolation helpers", () => {
         "org_alpha",
       ),
     ).toThrowError("Client access denied.");
+  });
+
+  it("rejects pay runs from another organization", () => {
+    expect(() =>
+      assertPayRunBelongsToOrganization(
+        {
+          id: "run_123",
+          organizationId: "org_bravo",
+        },
+        "org_alpha",
+      ),
+    ).toThrowError("Pay run access denied.");
   });
 });

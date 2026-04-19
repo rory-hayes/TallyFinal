@@ -1,0 +1,285 @@
+"use server";
+
+import { revalidatePath } from "next/cache";
+import { z } from "zod";
+
+import { requireAuthenticatedUser } from "@/lib/auth/session";
+import {
+  confirmSourceFileUpload,
+  createPayRunForClient,
+  findPayRunForClient,
+  registerSourceFileForPayRun,
+} from "@/lib/pay-runs/service";
+import { SOURCE_FILE_KINDS } from "@/lib/pay-runs/source-files";
+import { createSupabaseServerClient } from "@/lib/supabase/server";
+import { findClientForOrganization } from "@/lib/clients/service";
+import { readSourceFilesBucket } from "@/lib/env";
+import { canManagePayRuns } from "@/lib/tenancy/access";
+import { findOrganizationContextForUser } from "@/lib/tenancy/service";
+
+const payRunSchema = z
+  .object({
+    title: z.string().trim().min(2).max(120),
+    periodStart: z.coerce.date(),
+    periodEnd: z.coerce.date(),
+    payDate: z.preprocess(
+      (value) => (typeof value === "string" && value.trim() ? value : undefined),
+      z.coerce.date().optional(),
+    ),
+  })
+  .refine((value) => value.periodEnd >= value.periodStart, {
+    message: "Pay run dates are invalid.",
+    path: ["periodEnd"],
+  });
+
+const sourceFileRegistrationSchema = z.object({
+  kind: z.enum(SOURCE_FILE_KINDS),
+  originalFilename: z.string().trim().min(1).max(255),
+  contentType: z.string().trim().min(1).max(255),
+  byteSize: z.coerce.number().int().positive().max(500_000_000),
+  checksumSha256: z.string().trim().min(32).max(128),
+});
+
+async function requireMutablePayRunContext(
+  orgSlug: string,
+  clientId: string,
+  payRunId?: string,
+) {
+  const user = await requireAuthenticatedUser();
+  const organizationContext = await findOrganizationContextForUser(
+    user.id,
+    orgSlug,
+  );
+
+  if (!organizationContext) {
+    return {
+      error: "Organization access denied.",
+      ok: false as const,
+    };
+  }
+
+  if (!canManagePayRuns(organizationContext.role)) {
+    return {
+      error: "Your role cannot change pay runs.",
+      ok: false as const,
+    };
+  }
+
+  const client = await findClientForOrganization({
+    organizationId: organizationContext.organization.id,
+    clientId,
+  });
+
+  if (!client) {
+    return {
+      error: "Client access denied.",
+      ok: false as const,
+    };
+  }
+
+  if (payRunId) {
+    const payRun = await findPayRunForClient({
+      organizationId: organizationContext.organization.id,
+      clientId: client.id,
+      payRunId,
+    });
+
+    if (!payRun) {
+      return {
+        error: "Pay run access denied.",
+        ok: false as const,
+      };
+    }
+
+    return {
+      client,
+      ok: true as const,
+      organizationContext,
+      payRun,
+      user,
+    };
+  }
+
+  return {
+    client,
+    ok: true as const,
+    organizationContext,
+    user,
+  };
+}
+
+export async function createPayRunAction(
+  orgSlug: string,
+  clientId: string,
+  formData: FormData,
+) {
+  const context = await requireMutablePayRunContext(orgSlug, clientId);
+
+  if (!context.ok) {
+    return {
+      error: context.error,
+      ok: false as const,
+    };
+  }
+
+  const parsed = payRunSchema.safeParse({
+    title: formData.get("title"),
+    periodStart: formData.get("periodStart"),
+    periodEnd: formData.get("periodEnd"),
+    payDate: formData.get("payDate"),
+  });
+
+  if (!parsed.success) {
+    return {
+      error: "Check the pay run details before saving.",
+      ok: false as const,
+    };
+  }
+
+  const payRun = await createPayRunForClient({
+    organizationId: context.organizationContext.organization.id,
+    clientId: context.client.id,
+    createdByUserId: context.user.id,
+    title: parsed.data.title,
+    periodStart: parsed.data.periodStart,
+    periodEnd: parsed.data.periodEnd,
+    payDate: parsed.data.payDate,
+  });
+
+  revalidatePath(`/app/orgs/${orgSlug}/clients/${clientId}`);
+  revalidatePath(`/app/orgs/${orgSlug}/clients/${clientId}/pay-runs`);
+
+  return {
+    ok: true as const,
+    payRunId: payRun.id,
+  };
+}
+
+export async function registerSourceFileUploadAction(
+  orgSlug: string,
+  clientId: string,
+  payRunId: string,
+  formData: FormData,
+) {
+  const context = await requireMutablePayRunContext(orgSlug, clientId, payRunId);
+
+  if (!context.ok) {
+    return {
+      error: context.error,
+      ok: false as const,
+    };
+  }
+
+  if (!context.payRun) {
+    return {
+      error: "Pay run access denied.",
+      ok: false as const,
+    };
+  }
+
+  const payRun = context.payRun;
+
+  const parsed = sourceFileRegistrationSchema.safeParse({
+    kind: formData.get("kind"),
+    originalFilename: formData.get("originalFilename"),
+    contentType: formData.get("contentType"),
+    byteSize: formData.get("byteSize"),
+    checksumSha256: formData.get("checksumSha256"),
+  });
+
+  if (!parsed.success) {
+    return {
+      error: "Source file metadata was incomplete.",
+      ok: false as const,
+    };
+  }
+
+  try {
+    const storageBucket = readSourceFilesBucket();
+    const sourceFile = await registerSourceFileForPayRun({
+      organizationId: context.organizationContext.organization.id,
+      clientId: context.client.id,
+      payRunId: payRun.id,
+      uploadedByUserId: context.user.id,
+      kind: parsed.data.kind,
+      originalFilename: parsed.data.originalFilename,
+      contentType: parsed.data.contentType,
+      byteSize: parsed.data.byteSize,
+      checksumSha256: parsed.data.checksumSha256,
+      storageBucket,
+    });
+
+    const supabase = await createSupabaseServerClient();
+    const { data, error } = await supabase.storage
+      .from(storageBucket)
+      .createSignedUploadUrl(sourceFile.storagePath);
+
+    if (error || !data) {
+      return {
+        error: "Storage could not create an upload URL for this file.",
+        ok: false as const,
+      };
+    }
+
+    return {
+      bucket: storageBucket,
+      ok: true as const,
+      path: data.path,
+      sourceFileId: sourceFile.id,
+      token: data.token,
+    };
+  } catch (error) {
+    return {
+      error:
+        error instanceof Error ? error.message : "Source file registration failed.",
+      ok: false as const,
+    };
+  }
+}
+
+export async function confirmSourceFileUploadAction(
+  orgSlug: string,
+  clientId: string,
+  payRunId: string,
+  sourceFileId: string,
+) {
+  const context = await requireMutablePayRunContext(orgSlug, clientId, payRunId);
+
+  if (!context.ok) {
+    return {
+      error: context.error,
+      ok: false as const,
+    };
+  }
+
+  if (!context.payRun) {
+    return {
+      error: "Pay run access denied.",
+      ok: false as const,
+    };
+  }
+
+  const payRun = context.payRun;
+
+  try {
+    await confirmSourceFileUpload({
+      organizationId: context.organizationContext.organization.id,
+      payRunId: payRun.id,
+      sourceFileId,
+    });
+
+    revalidatePath(`/app/orgs/${orgSlug}/clients/${clientId}`);
+    revalidatePath(`/app/orgs/${orgSlug}/clients/${clientId}/pay-runs`);
+    revalidatePath(`/app/orgs/${orgSlug}/clients/${clientId}/pay-runs/${payRunId}`);
+
+    return {
+      ok: true as const,
+    };
+  } catch (error) {
+    return {
+      error:
+        error instanceof Error ? error.message : "Source file confirmation failed.",
+      ok: false as const,
+    };
+  }
+}
