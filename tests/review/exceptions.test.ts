@@ -35,6 +35,7 @@ vi.mock("../../lib/prisma", () => ({
 
 import {
   addReviewExceptionComment,
+  bulkAssignReviewExceptions,
   bulkSetReviewExceptionStatus,
   listReviewExceptions,
   materializeRuleResultsAndExceptions,
@@ -228,6 +229,48 @@ describe("review exception lifecycle", () => {
           fromStatus: "open",
           note: "Reviewed against source evidence.",
           toStatus: "resolved",
+        },
+      }),
+    });
+  });
+
+  it("bulk assigns exceptions without mutating immutable rule results", async () => {
+    transactionMock.reviewException.findMany.mockResolvedValue([
+      {
+        assigneeUserId: null,
+        id: "exception_1",
+      },
+      {
+        assigneeUserId: "user_456",
+        id: "exception_2",
+      },
+    ]);
+    transactionMock.reviewException.update.mockResolvedValue({});
+    transactionMock.exceptionComment.create.mockResolvedValue({});
+
+    const result = await bulkAssignReviewExceptions({
+      actorUserId: "user_123",
+      assigneeUserId: "user_789",
+      clientId: "client_123",
+      exceptionIds: ["exception_1", "missing_exception"],
+      organizationId: "org_123",
+      payRunId: "run_123",
+    });
+
+    expect(result).toEqual({
+      skippedExceptionIds: ["missing_exception"],
+      updatedExceptionCount: 2,
+    });
+    expect(transactionMock.reviewException.update).toHaveBeenCalledTimes(2);
+    expect(transactionMock.exceptionComment.create).toHaveBeenCalledWith({
+      data: expect.objectContaining({
+        authorUserId: "user_123",
+        body: "Exception assigned to user_789.",
+        commentType: "audit_log",
+        metadata: {
+          action: "assign",
+          assigneeUserId: "user_789",
+          previousAssigneeUserId: null,
         },
       }),
     });

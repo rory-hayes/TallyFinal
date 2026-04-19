@@ -57,6 +57,24 @@ export async function listOrganizationMemberships(userId: string) {
   }));
 }
 
+export async function listOrganizationReviewAssignees(organizationId: string) {
+  return prisma.organizationMember.findMany({
+    where: {
+      organizationId,
+      role: {
+        in: ["admin", "operator", "reviewer"],
+      },
+    },
+    orderBy: [{ displayName: "asc" }, { email: "asc" }, { userId: "asc" }],
+    select: {
+      displayName: true,
+      email: true,
+      role: true,
+      userId: true,
+    },
+  });
+}
+
 export async function findOrganizationContextForUser(
   userId: string,
   organizationSlug: string,

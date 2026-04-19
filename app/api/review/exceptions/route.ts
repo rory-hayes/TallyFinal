@@ -3,17 +3,27 @@ import { z } from "zod";
 
 import { requireAuthenticatedUser } from "@/lib/auth/session";
 import {
+  bulkAssignReviewExceptions,
   bulkSetReviewExceptionStatus,
   listReviewExceptions,
 } from "@/lib/review/exceptions";
 import { canManageReviewExceptions } from "@/lib/tenancy/access";
 import { findOrganizationContextForUser } from "@/lib/tenancy/service";
 
-const bulkUpdateSchema = z.object({
+const bulkStatusUpdateSchema = z.object({
   action: z.enum(["ignore", "resolve"]),
   clientId: z.string().trim().min(1),
   exceptionIds: z.array(z.string().trim().min(1)).min(1),
   note: z.string().trim().max(1_000).optional(),
+  orgSlug: z.string().trim().min(1),
+  payRunId: z.string().trim().min(1),
+});
+
+const bulkAssignmentSchema = z.object({
+  action: z.literal("assign"),
+  assigneeUserId: z.string().trim().min(1),
+  clientId: z.string().trim().min(1),
+  exceptionIds: z.array(z.string().trim().min(1)).min(1),
   orgSlug: z.string().trim().min(1),
   payRunId: z.string().trim().min(1),
 });
@@ -73,7 +83,10 @@ export async function GET(request: NextRequest) {
 
 export async function PATCH(request: NextRequest) {
   const user = await requireAuthenticatedUser();
-  const parsed = bulkUpdateSchema.safeParse(await request.json());
+  const body = await request.json();
+  const parsed = z
+    .discriminatedUnion("action", [bulkStatusUpdateSchema, bulkAssignmentSchema])
+    .safeParse(body);
 
   if (!parsed.success) {
     return Response.json(
@@ -113,15 +126,25 @@ export async function PATCH(request: NextRequest) {
     );
   }
 
-  const result = await bulkSetReviewExceptionStatus({
-    action: parsed.data.action,
-    actorUserId: user.id,
-    clientId: parsed.data.clientId,
-    exceptionIds: parsed.data.exceptionIds,
-    note: parsed.data.note,
-    organizationId: organizationContext.organization.id,
-    payRunId: parsed.data.payRunId,
-  });
+  const result =
+    parsed.data.action === "assign"
+      ? await bulkAssignReviewExceptions({
+          actorUserId: user.id,
+          assigneeUserId: parsed.data.assigneeUserId,
+          clientId: parsed.data.clientId,
+          exceptionIds: parsed.data.exceptionIds,
+          organizationId: organizationContext.organization.id,
+          payRunId: parsed.data.payRunId,
+        })
+      : await bulkSetReviewExceptionStatus({
+          action: parsed.data.action,
+          actorUserId: user.id,
+          clientId: parsed.data.clientId,
+          exceptionIds: parsed.data.exceptionIds,
+          note: parsed.data.note,
+          organizationId: organizationContext.organization.id,
+          payRunId: parsed.data.payRunId,
+        });
 
   return Response.json({
     ok: true,
