@@ -30,16 +30,16 @@ export default async function SignInPage({
               variant="outline"
               className="rounded-md border-emerald-600/25 bg-emerald-500/10 text-emerald-800"
             >
-              Tally tenancy foundation
+              Tally pay run shell
             </Badge>
             <div className="space-y-3">
               <h1 className="max-w-3xl text-4xl font-semibold tracking-tight text-foreground">
-                Sign in to manage organizations and clients.
+                Sign in to manage organizations, clients, and pay runs.
               </h1>
               <p className="max-w-2xl text-base text-muted-foreground">
-                This slice only covers signed-in access, org membership, roles,
-                and tenant-safe client management. Payroll review stays out of
-                the frame for now.
+                Tally now has tenant-safe orgs, client records, pay runs, and
+                upload lineage for source files. Payroll parsing and review
+                logic still come later.
               </p>
             </div>
             <div className="grid gap-4 sm:grid-cols-3">
@@ -56,16 +56,16 @@ export default async function SignInPage({
                   <CardTitle className="text-lg">Role-safe</CardTitle>
                 </CardHeader>
                 <CardContent className="text-sm text-muted-foreground">
-                  Server-side permissions gate every client mutation.
+                  Server-side permissions gate client and pay run mutations.
                 </CardContent>
               </Card>
               <Card className="rounded-md border-border/80">
                 <CardHeader>
-                  <CardTitle className="text-lg">Tenant-safe</CardTitle>
+                  <CardTitle className="text-lg">Lineage-first</CardTitle>
                 </CardHeader>
                 <CardContent className="text-sm text-muted-foreground">
-                  Every org-scoped route is filtered through membership and
-                  organization ownership.
+                  Source file uploads are versioned instead of overwritten in
+                  place.
                 </CardContent>
               </Card>
             </div>

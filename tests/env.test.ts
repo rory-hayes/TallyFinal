@@ -40,6 +40,7 @@ describe("createServiceStatusSnapshot", () => {
   it("creates stable labels for the shell health table", () => {
     const snapshot = createServiceStatusSnapshot({
       appName: "Tally",
+      sourceFilesBucket: "tally-source-files",
       services: {
         supabase: true,
         database: false,

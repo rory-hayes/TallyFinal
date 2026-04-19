@@ -383,7 +383,7 @@ At the end, provide:
 
 ---
 
-## [ ] P03 — Build pay run and source file shell
+## [x] P03 — Build pay run and source file shell
 **Mode:** Code
 **When to run:** after P02
 **Goal:** create pay runs and upload lineage before payroll logic
@@ -1227,7 +1227,7 @@ Use this as your operating rhythm.
 
 ## Build sequence
 - [x] P02
-- [ ] P03
+- [x] P03
 - [ ] P04
 - [ ] Add real fixtures manually
 - [ ] P05

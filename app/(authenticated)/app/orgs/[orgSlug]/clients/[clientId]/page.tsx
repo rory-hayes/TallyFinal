@@ -77,9 +77,16 @@ export default async function ClientDetailPage({
             </p>
           ) : null}
         </div>
-        <Button asChild variant="outline" className="rounded-md">
-          <Link href={`/app/orgs/${orgSlug}/clients`}>Back to clients</Link>
-        </Button>
+        <div className="flex flex-wrap gap-2">
+          <Button asChild variant="outline" className="rounded-md">
+            <Link href={`/app/orgs/${orgSlug}/clients`}>Back to clients</Link>
+          </Button>
+          <Button asChild variant="outline" className="rounded-md">
+            <Link href={`/app/orgs/${orgSlug}/clients/${client.id}/pay-runs`}>
+              Pay runs
+            </Link>
+          </Button>
+        </div>
       </div>
 
       <Card className="rounded-md border-border/80">
@@ -151,6 +158,23 @@ export default async function ClientDetailPage({
               </div>
             </dl>
           )}
+        </CardContent>
+      </Card>
+
+      <Card className="rounded-md border-border/80">
+        <CardHeader>
+          <CardTitle>Pay runs</CardTitle>
+        </CardHeader>
+        <CardContent className="flex flex-wrap items-center justify-between gap-4">
+          <p className="max-w-2xl text-sm text-muted-foreground">
+            Pay runs now hold source-file lineage for this client before import
+            preview, mapping, and employee-level review logic arrive.
+          </p>
+          <Button asChild className="rounded-md">
+            <Link href={`/app/orgs/${orgSlug}/clients/${client.id}/pay-runs`}>
+              Open pay runs
+            </Link>
+          </Button>
         </CardContent>
       </Card>
     </div>

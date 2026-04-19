@@ -15,14 +15,25 @@ export type OrganizationMembershipSummary = {
 };
 
 const CLIENT_MUTATION_ROLES = new Set<OrganizationRole>(["admin", "operator"]);
+const PAY_RUN_MUTATION_ROLES = new Set<OrganizationRole>(["admin", "operator"]);
 
 export function canManageClients(role: OrganizationRole) {
   return CLIENT_MUTATION_ROLES.has(role);
 }
 
+export function canManagePayRuns(role: OrganizationRole) {
+  return PAY_RUN_MUTATION_ROLES.has(role);
+}
+
 export function assertCanManageClients(role: OrganizationRole) {
   if (!canManageClients(role)) {
     throw new Error("Client management is not permitted for this role.");
+  }
+}
+
+export function assertCanManagePayRuns(role: OrganizationRole) {
+  if (!canManagePayRuns(role)) {
+    throw new Error("Pay run management is not permitted for this role.");
   }
 }
 
@@ -56,4 +67,15 @@ export function assertClientBelongsToOrganization(
   }
 
   return client;
+}
+
+export function assertPayRunBelongsToOrganization(
+  payRun: { id: string; organizationId: string } | null,
+  organizationId: string,
+) {
+  if (!payRun || payRun.organizationId !== organizationId) {
+    throw new Error("Pay run access denied.");
+  }
+
+  return payRun;
 }

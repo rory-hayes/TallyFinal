@@ -15,6 +15,26 @@ enum OrganizationRole {
   viewer
 }
 
+enum PayRunStatus {
+  draft
+  collecting_files
+  ready_for_import
+  archived
+}
+
+enum SourceFileKind {
+  current_payroll
+  previous_payroll
+  journal
+  payment
+}
+
+enum SourceFileStatus {
+  registered
+  uploaded
+  superseded
+}
+
 model Organization {
   id              String               @id @default(cuid())
   name            String
@@ -24,6 +44,8 @@ model Organization {
   updatedAt       DateTime             @updatedAt
   members         OrganizationMember[]
   clients         Client[]
+  payRuns         PayRun[]
+  sourceFiles     SourceFile[]
 }
 
 model OrganizationMember {
@@ -57,9 +79,68 @@ model Client {
   updatedAt       DateTime     @updatedAt
   archivedAt      DateTime?
   organization    Organization @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  payRuns         PayRun[]
+  sourceFiles     SourceFile[]
 
   @@unique([organizationId, slug])
   @@unique([id, organizationId])
   @@index([organizationId, archivedAt])
   @@index([organizationId, name])
+}
+
+model PayRun {
+  id              String       @id @default(cuid())
+  organizationId  String
+  clientId        String
+  title           String
+  periodStart     DateTime
+  periodEnd       DateTime
+  payDate         DateTime?
+  status          PayRunStatus @default(draft)
+  createdByUserId String
+  updatedByUserId String?
+  createdAt       DateTime     @default(now())
+  updatedAt       DateTime     @updatedAt
+  archivedAt      DateTime?
+  organization    Organization @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  client          Client       @relation(fields: [clientId, organizationId], references: [id, organizationId], onDelete: Cascade)
+  sourceFiles     SourceFile[]
+
+  @@unique([id, organizationId])
+  @@index([organizationId, clientId, archivedAt])
+  @@index([clientId, status])
+  @@index([organizationId, status])
+}
+
+model SourceFile {
+  id               String           @id @default(cuid())
+  organizationId   String
+  clientId         String
+  payRunId         String
+  kind             SourceFileKind
+  status           SourceFileStatus @default(registered)
+  originalFilename String
+  storageBucket    String
+  storagePath      String
+  contentType      String?
+  byteSize         Int?
+  checksumSha256   String
+  version          Int
+  replacementOfId  String?
+  uploadedByUserId String
+  uploadedAt       DateTime?
+  createdAt        DateTime         @default(now())
+  updatedAt        DateTime         @updatedAt
+  organization     Organization     @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  client           Client           @relation(fields: [clientId, organizationId], references: [id, organizationId], onDelete: Cascade)
+  payRun           PayRun           @relation(fields: [payRunId, organizationId], references: [id, organizationId], onDelete: Cascade)
+  replacementOf    SourceFile?      @relation("SourceFileReplacementChain", fields: [replacementOfId], references: [id], onDelete: SetNull)
+  replacements     SourceFile[]     @relation("SourceFileReplacementChain")
+
+  @@unique([id, payRunId])
+  @@unique([payRunId, kind, version])
+  @@unique([storageBucket, storagePath])
+  @@index([organizationId, payRunId, kind])
+  @@index([payRunId, status])
+  @@index([replacementOfId])
 }

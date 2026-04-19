@@ -1,5 +1,6 @@
 export type AppEnvironment = {
   appName: string;
+  sourceFilesBucket: string;
   services: {
     supabase: boolean;
     database: boolean;
@@ -23,9 +24,12 @@ export function readAppEnvironment(
   env: EnvironmentSource = process.env,
 ): AppEnvironment {
   const appName = env.NEXT_PUBLIC_APP_NAME?.trim() || "Tally";
+  const sourceFilesBucket =
+    env.TALLY_SOURCE_FILES_BUCKET?.trim() || "tally-source-files";
 
   return {
     appName,
+    sourceFilesBucket,
     services: {
       supabase:
         hasValue(env.NEXT_PUBLIC_SUPABASE_URL) &&
@@ -91,4 +95,8 @@ export function requireDatabaseUrl(env: EnvironmentSource = process.env) {
   }
 
   return databaseUrl.trim();
+}
+
+export function readSourceFilesBucket(env: EnvironmentSource = process.env) {
+  return env.TALLY_SOURCE_FILES_BUCKET?.trim() || "tally-source-files";
 }

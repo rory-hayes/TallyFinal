@@ -33,12 +33,13 @@ export function AppShell({
                 variant="outline"
                 className="rounded-md border-emerald-600/25 bg-emerald-500/10 text-emerald-800"
               >
-                Tenant-safe foundation
+                Pay run shell
               </Badge>
             </div>
             <p className="max-w-2xl text-sm text-muted-foreground">
-              Employee-level payroll review still comes later. This shell is now
-              focused on signed-in tenancy, org access, and client safety.
+              Employee-level payroll review still comes later. This shell now
+              covers signed-in tenancy, client access, pay runs, and source-file
+              lineage.
             </p>
           </div>
 
