@@ -41,19 +41,70 @@ enum SourceFilePreviewStatus {
   failed
 }
 
+enum EmployeeRecordScope {
+  current
+  previous
+}
+
+enum EmployeePayComponentCategory {
+  earning
+  deduction
+  employer_cost
+  other
+}
+
+enum EmployeeMatchMethod {
+  exact_identifier
+  manual
+  unmatched
+}
+
+enum RuleResultStatus {
+  passed
+  failed
+}
+
+enum RuleResultSeverity {
+  info
+  warning
+  blocker
+}
+
+enum ReviewExceptionStatus {
+  open
+  in_review
+  resolved
+  dismissed
+}
+
+enum ApprovalEventType {
+  submitted
+  approved
+  rejected
+  reopened
+}
+
 model Organization {
-  id              String               @id @default(cuid())
-  name            String
-  slug            String               @unique
-  createdByUserId String
-  createdAt       DateTime             @default(now())
-  updatedAt       DateTime             @updatedAt
-  members         OrganizationMember[]
-  clients         Client[]
-  payRuns         PayRun[]
-  sourceFiles     SourceFile[]
-  mappingTemplates MappingTemplate[]
+  id                 String               @id @default(cuid())
+  name               String
+  slug               String               @unique
+  createdByUserId    String
+  createdAt          DateTime             @default(now())
+  updatedAt          DateTime             @updatedAt
+  members            OrganizationMember[]
+  clients            Client[]
+  payRuns            PayRun[]
+  sourceFiles        SourceFile[]
+  mappingTemplates   MappingTemplate[]
   sourceColumnMappings SourceColumnMapping[]
+  employeeRunRecords EmployeeRunRecord[]
+  employeePayComponents EmployeePayComponent[]
+  sourceRowRefs      SourceRowRef[]
+  employeeMatches    EmployeeMatch[]
+  ruleResults        RuleResult[]
+  reviewExceptions   ReviewException[]
+  exceptionComments  ExceptionComment[]
+  approvalEvents     ApprovalEvent[]
 }
 
 model OrganizationMember {
@@ -74,22 +125,30 @@ model OrganizationMember {
 }
 
 model Client {
-  id              String       @id @default(cuid())
-  organizationId  String
-  name            String
-  slug            String
-  legalName       String?
-  countryCode     String       @default("IE")
-  notes           String?
-  createdByUserId String
-  updatedByUserId String?
-  createdAt       DateTime     @default(now())
-  updatedAt       DateTime     @updatedAt
-  archivedAt      DateTime?
-  organization    Organization @relation(fields: [organizationId], references: [id], onDelete: Cascade)
-  payRuns         PayRun[]
-  sourceFiles     SourceFile[]
-  mappingTemplates MappingTemplate[]
+  id                   String       @id @default(cuid())
+  organizationId       String
+  name                 String
+  slug                 String
+  legalName            String?
+  countryCode          String       @default("IE")
+  notes                String?
+  createdByUserId      String
+  updatedByUserId      String?
+  createdAt            DateTime     @default(now())
+  updatedAt            DateTime     @updatedAt
+  archivedAt           DateTime?
+  organization         Organization @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  payRuns              PayRun[]
+  sourceFiles          SourceFile[]
+  mappingTemplates     MappingTemplate[]
+  employeeRunRecords   EmployeeRunRecord[]
+  employeePayComponents EmployeePayComponent[]
+  sourceRowRefs        SourceRowRef[]
+  employeeMatches      EmployeeMatch[]
+  ruleResults          RuleResult[]
+  reviewExceptions     ReviewException[]
+  exceptionComments    ExceptionComment[]
+  approvalEvents       ApprovalEvent[]
 
   @@unique([organizationId, slug])
   @@unique([id, organizationId])
@@ -98,22 +157,30 @@ model Client {
 }
 
 model PayRun {
-  id              String       @id @default(cuid())
-  organizationId  String
-  clientId        String
-  title           String
-  periodStart     DateTime
-  periodEnd       DateTime
-  payDate         DateTime?
-  status          PayRunStatus @default(draft)
-  createdByUserId String
-  updatedByUserId String?
-  createdAt       DateTime     @default(now())
-  updatedAt       DateTime     @updatedAt
-  archivedAt      DateTime?
-  organization    Organization @relation(fields: [organizationId], references: [id], onDelete: Cascade)
-  client          Client       @relation(fields: [clientId, organizationId], references: [id, organizationId], onDelete: Cascade)
-  sourceFiles     SourceFile[]
+  id                   String       @id @default(cuid())
+  organizationId       String
+  clientId             String
+  title                String
+  periodStart          DateTime
+  periodEnd            DateTime
+  payDate              DateTime?
+  status               PayRunStatus @default(draft)
+  createdByUserId      String
+  updatedByUserId      String?
+  createdAt            DateTime     @default(now())
+  updatedAt            DateTime     @updatedAt
+  archivedAt           DateTime?
+  organization         Organization @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  client               Client       @relation(fields: [clientId, organizationId], references: [id, organizationId], onDelete: Cascade)
+  sourceFiles          SourceFile[]
+  employeeRunRecords   EmployeeRunRecord[]
+  employeePayComponents EmployeePayComponent[]
+  sourceRowRefs        SourceRowRef[]
+  employeeMatches      EmployeeMatch[]
+  ruleResults          RuleResult[]
+  reviewExceptions     ReviewException[]
+  exceptionComments    ExceptionComment[]
+  approvalEvents       ApprovalEvent[]
 
   @@unique([id, organizationId])
   @@index([organizationId, clientId, archivedAt])
@@ -122,37 +189,40 @@ model PayRun {
 }
 
 model SourceFile {
-  id               String           @id @default(cuid())
-  organizationId   String
-  clientId         String
-  payRunId         String
-  kind             SourceFileKind
-  status           SourceFileStatus @default(registered)
-  originalFilename String
-  storageBucket    String
-  storagePath      String
-  contentType      String?
-  byteSize         Int?
-  checksumSha256   String
-  version          Int
-  replacementOfId  String?
-  uploadedByUserId String
-  uploadedAt       DateTime?
-  previewStatus    SourceFilePreviewStatus @default(pending)
-  previewSheetName String?
-  previewHeaders   Json?
+  id                 String           @id @default(cuid())
+  organizationId     String
+  clientId           String
+  payRunId           String
+  kind               SourceFileKind
+  status             SourceFileStatus @default(registered)
+  originalFilename   String
+  storageBucket      String
+  storagePath        String
+  contentType        String?
+  byteSize           Int?
+  checksumSha256     String
+  version            Int
+  replacementOfId    String?
+  uploadedByUserId   String
+  uploadedAt         DateTime?
+  previewStatus      SourceFilePreviewStatus @default(pending)
+  previewSheetName   String?
+  previewHeaders     Json?
   previewSampleRows Json?
-  previewRowCount  Int?
-  previewError     String?
-  importProfileKey String?
-  createdAt        DateTime         @default(now())
-  updatedAt        DateTime         @updatedAt
-  organization     Organization     @relation(fields: [organizationId], references: [id], onDelete: Cascade)
-  client           Client           @relation(fields: [clientId, organizationId], references: [id, organizationId], onDelete: Cascade)
-  payRun           PayRun           @relation(fields: [payRunId, organizationId], references: [id, organizationId], onDelete: Cascade)
-  replacementOf    SourceFile?      @relation("SourceFileReplacementChain", fields: [replacementOfId], references: [id], onDelete: SetNull)
-  replacements     SourceFile[]     @relation("SourceFileReplacementChain")
+  previewRowCount    Int?
+  previewError       String?
+  importProfileKey   String?
+  createdAt          DateTime         @default(now())
+  updatedAt          DateTime         @updatedAt
+  organization       Organization     @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  client             Client           @relation(fields: [clientId, organizationId], references: [id, organizationId], onDelete: Cascade)
+  payRun             PayRun           @relation(fields: [payRunId, organizationId], references: [id, organizationId], onDelete: Cascade)
+  replacementOf      SourceFile?      @relation("SourceFileReplacementChain", fields: [replacementOfId], references: [id], onDelete: SetNull)
+  replacements       SourceFile[]     @relation("SourceFileReplacementChain")
   sourceColumnMappings SourceColumnMapping[]
+  employeeRunRecords EmployeeRunRecord[]
+  employeePayComponents EmployeePayComponent[]
+  sourceRowRefs      SourceRowRef[]
 
   @@unique([id, payRunId])
   @@unique([payRunId, kind, version])
@@ -196,4 +266,196 @@ model SourceColumnMapping {
 
   @@unique([sourceFileId, targetFieldKey])
   @@index([organizationId, sourceFileId])
+}
+
+/// Canonical employee-level review record. Pay-run summaries are not canonical review state.
+model EmployeeRunRecord {
+  id                  String              @id @default(cuid())
+  organizationId      String
+  clientId            String
+  payRunId            String
+  sourceFileId        String
+  recordScope         EmployeeRecordScope
+  employeeExternalId  String?
+  employeeNumber      String?
+  employeeDisplayName String
+  grossPay            Decimal?            @db.Decimal(18, 2)
+  netPay              Decimal?            @db.Decimal(18, 2)
+  createdAt           DateTime            @default(now())
+  updatedAt           DateTime            @updatedAt
+  organization        Organization        @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  client              Client              @relation(fields: [clientId, organizationId], references: [id, organizationId], onDelete: Cascade)
+  payRun              PayRun              @relation(fields: [payRunId, organizationId], references: [id, organizationId], onDelete: Cascade)
+  sourceFile          SourceFile          @relation(fields: [sourceFileId], references: [id], onDelete: Cascade)
+  payComponents       EmployeePayComponent[]
+  sourceRowRefs       SourceRowRef[]
+  currentEmployeeMatch EmployeeMatch?     @relation("CurrentEmployeeMatch")
+  previousEmployeeMatches EmployeeMatch[] @relation("PreviousEmployeeMatch")
+  ruleResults         RuleResult[]
+
+  @@index([organizationId, payRunId, recordScope])
+  @@index([sourceFileId, recordScope])
+  @@index([clientId, payRunId])
+}
+
+model EmployeePayComponent {
+  id                  String                       @id @default(cuid())
+  organizationId      String
+  clientId            String
+  payRunId            String
+  sourceFileId        String
+  employeeRunRecordId String
+  componentCode       String
+  componentLabel      String
+  category            EmployeePayComponentCategory
+  amount              Decimal                      @db.Decimal(18, 2)
+  quantity            Decimal?                     @db.Decimal(18, 4)
+  unitRate            Decimal?                     @db.Decimal(18, 4)
+  createdAt           DateTime                     @default(now())
+  updatedAt           DateTime                     @updatedAt
+  organization        Organization                 @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  client              Client                       @relation(fields: [clientId, organizationId], references: [id, organizationId], onDelete: Cascade)
+  payRun              PayRun                       @relation(fields: [payRunId, organizationId], references: [id, organizationId], onDelete: Cascade)
+  sourceFile          SourceFile                   @relation(fields: [sourceFileId], references: [id], onDelete: Cascade)
+  employeeRunRecord   EmployeeRunRecord            @relation(fields: [employeeRunRecordId], references: [id], onDelete: Cascade)
+  sourceRowRefs       SourceRowRef[]
+  ruleResults         RuleResult[]
+
+  @@index([employeeRunRecordId, category])
+  @@index([organizationId, payRunId])
+  @@index([sourceFileId])
+}
+
+model SourceRowRef {
+  id                   String               @id @default(cuid())
+  organizationId       String
+  clientId             String
+  payRunId             String
+  sourceFileId         String
+  employeeRunRecordId  String?
+  employeePayComponentId String?
+  sheetName            String?
+  rowNumber            Int
+  columnHeader         String?
+  columnValue          String?
+  canonicalFieldKey    String?
+  createdAt            DateTime             @default(now())
+  organization         Organization         @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  client               Client               @relation(fields: [clientId, organizationId], references: [id, organizationId], onDelete: Cascade)
+  payRun               PayRun               @relation(fields: [payRunId, organizationId], references: [id, organizationId], onDelete: Cascade)
+  sourceFile           SourceFile           @relation(fields: [sourceFileId], references: [id], onDelete: Cascade)
+  employeeRunRecord    EmployeeRunRecord?   @relation(fields: [employeeRunRecordId], references: [id], onDelete: Cascade)
+  employeePayComponent EmployeePayComponent? @relation(fields: [employeePayComponentId], references: [id], onDelete: Cascade)
+
+  @@index([organizationId, payRunId, rowNumber])
+  @@index([sourceFileId, rowNumber])
+  @@index([employeeRunRecordId])
+  @@index([employeePayComponentId])
+}
+
+model EmployeeMatch {
+  id                        String              @id @default(cuid())
+  organizationId            String
+  clientId                  String
+  payRunId                  String
+  currentEmployeeRunRecordId String             @unique
+  previousEmployeeRunRecordId String?           @unique
+  matchMethod               EmployeeMatchMethod
+  createdAt                 DateTime            @default(now())
+  updatedAt                 DateTime            @updatedAt
+  organization              Organization        @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  client                    Client              @relation(fields: [clientId, organizationId], references: [id, organizationId], onDelete: Cascade)
+  payRun                    PayRun              @relation(fields: [payRunId, organizationId], references: [id, organizationId], onDelete: Cascade)
+  currentEmployeeRunRecord  EmployeeRunRecord   @relation("CurrentEmployeeMatch", fields: [currentEmployeeRunRecordId], references: [id], onDelete: Cascade)
+  previousEmployeeRunRecord EmployeeRunRecord?  @relation("PreviousEmployeeMatch", fields: [previousEmployeeRunRecordId], references: [id], onDelete: SetNull)
+  ruleResults               RuleResult[]
+
+  @@index([organizationId, payRunId])
+  @@index([clientId, payRunId])
+}
+
+model RuleResult {
+  id                    String              @id @default(cuid())
+  organizationId        String
+  clientId              String
+  payRunId              String
+  employeeRunRecordId   String
+  employeePayComponentId String?
+  employeeMatchId       String?
+  ruleCode              String
+  ruleVersion           String
+  resultStatus          RuleResultStatus    @default(failed)
+  severity              RuleResultSeverity
+  ruleMessage           String
+  details               Json?
+  createdAt             DateTime            @default(now())
+  organization          Organization        @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  client                Client              @relation(fields: [clientId, organizationId], references: [id, organizationId], onDelete: Cascade)
+  payRun                PayRun              @relation(fields: [payRunId, organizationId], references: [id, organizationId], onDelete: Cascade)
+  employeeRunRecord     EmployeeRunRecord   @relation(fields: [employeeRunRecordId], references: [id], onDelete: Cascade)
+  employeePayComponent  EmployeePayComponent? @relation(fields: [employeePayComponentId], references: [id], onDelete: SetNull)
+  employeeMatch         EmployeeMatch?      @relation(fields: [employeeMatchId], references: [id], onDelete: SetNull)
+  reviewException       ReviewException?
+
+  @@index([organizationId, payRunId, ruleCode])
+  @@index([employeeRunRecordId, severity])
+  @@index([employeeMatchId])
+}
+
+model ReviewException {
+  id             String                @id @default(cuid())
+  organizationId String
+  clientId       String
+  payRunId       String
+  ruleResultId   String                @unique
+  reviewStatus   ReviewExceptionStatus @default(open)
+  assigneeUserId String?
+  resolutionNote String?
+  resolvedAt     DateTime?
+  resolvedByUserId String?
+  createdAt      DateTime              @default(now())
+  updatedAt      DateTime              @updatedAt
+  organization   Organization          @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  client         Client                @relation(fields: [clientId, organizationId], references: [id, organizationId], onDelete: Cascade)
+  payRun         PayRun                @relation(fields: [payRunId, organizationId], references: [id, organizationId], onDelete: Cascade)
+  ruleResult     RuleResult            @relation(fields: [ruleResultId], references: [id], onDelete: Cascade)
+  comments       ExceptionComment[]
+
+  @@index([organizationId, payRunId, reviewStatus])
+  @@index([clientId, payRunId])
+}
+
+model ExceptionComment {
+  id                String          @id @default(cuid())
+  organizationId    String
+  clientId          String
+  payRunId          String
+  reviewExceptionId String
+  authorUserId      String
+  body              String
+  createdAt         DateTime        @default(now())
+  organization      Organization    @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  client            Client          @relation(fields: [clientId, organizationId], references: [id, organizationId], onDelete: Cascade)
+  payRun            PayRun          @relation(fields: [payRunId, organizationId], references: [id, organizationId], onDelete: Cascade)
+  reviewException   ReviewException @relation(fields: [reviewExceptionId], references: [id], onDelete: Cascade)
+
+  @@index([reviewExceptionId, createdAt])
+  @@index([organizationId, payRunId])
+}
+
+model ApprovalEvent {
+  id             String            @id @default(cuid())
+  organizationId String
+  clientId       String
+  payRunId       String
+  actorUserId    String
+  eventType      ApprovalEventType
+  note           String?
+  createdAt      DateTime          @default(now())
+  organization   Organization      @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  client         Client            @relation(fields: [clientId, organizationId], references: [id, organizationId], onDelete: Cascade)
+  payRun         PayRun            @relation(fields: [payRunId, organizationId], references: [id, organizationId], onDelete: Cascade)
+
+  @@index([organizationId, payRunId, createdAt])
+  @@index([clientId, payRunId])
 }
