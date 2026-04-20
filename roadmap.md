@@ -143,6 +143,7 @@ Add secondary capabilities without displacing the reviewer-first core.
 ### Acceptance Criteria
 - secondary workflows reuse the reviewer-first domain model
 - reviewer queue and drilldown remain the primary product surface
+- pilot hardening keeps reruns explicit, exports useful, and lineage intact
 
 ## Manual Inputs Needed
 - at least 2 anonymized Irish current/previous payroll CSV pairs

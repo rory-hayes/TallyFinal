@@ -4,6 +4,7 @@ import { prisma } from "@/lib/prisma";
 import type { ReviewRuleFinding } from "@/lib/review/rules";
 
 type ReviewExceptionStatusAction = "ignore" | "resolve";
+type ReviewExceptionStore = Prisma.TransactionClient | typeof prisma;
 
 const reviewExceptionListInclude =
   Prisma.validator<Prisma.ReviewExceptionInclude>()({
@@ -44,13 +45,16 @@ export type ReviewExceptionListItem = Prisma.ReviewExceptionGetPayload<{
   include: typeof reviewExceptionListInclude;
 }>;
 
-export async function materializeRuleResultsAndExceptions(input: {
+export async function materializeRuleResultsAndExceptions(
+  input: {
   clientId: string;
   findings: ReviewRuleFinding[];
   organizationId: string;
   payRunId: string;
-}) {
-  return prisma.$transaction(async (transaction) => {
+  },
+  store?: ReviewExceptionStore,
+) {
+  const execute = async (client: ReviewExceptionStore) => {
     const employeeRunRecordIds = Array.from(
       new Set(input.findings.map((finding) => finding.employeeRunRecordId)),
     );
@@ -60,7 +64,7 @@ export async function materializeRuleResultsAndExceptions(input: {
     const ruleVersions = Array.from(
       new Set(input.findings.map((finding) => finding.ruleVersion)),
     );
-    const existingRuleResults = await transaction.ruleResult.findMany({
+    const existingRuleResults = await client.ruleResult.findMany({
       where: {
         clientId: input.clientId,
         employeeRunRecordId: {
@@ -121,7 +125,7 @@ export async function materializeRuleResultsAndExceptions(input: {
         continue;
       }
 
-      const ruleResult = await transaction.ruleResult.create({
+      const ruleResult = await client.ruleResult.create({
         data: {
           clientId: input.clientId,
           details: finding.details as Prisma.InputJsonValue,
@@ -140,7 +144,7 @@ export async function materializeRuleResultsAndExceptions(input: {
       createdRuleResultCount += 1;
       existingResultKeys.add(findingKey);
 
-      await transaction.reviewException.create({
+      await client.reviewException.create({
         data: {
           clientId: input.clientId,
           organizationId: input.organizationId,
@@ -157,7 +161,13 @@ export async function materializeRuleResultsAndExceptions(input: {
       createdRuleResultCount,
       skippedExistingRuleResultCount,
     };
-  });
+  };
+
+  if (store) {
+    return execute(store);
+  }
+
+  return prisma.$transaction((transaction) => execute(transaction));
 }
 
 export async function listReviewExceptions(input: {
@@ -165,6 +175,7 @@ export async function listReviewExceptions(input: {
   employee?: string;
   organizationId: string;
   payRunId: string;
+  reviewSnapshotVersion?: number;
   ruleCode?: string;
   severity?: "blocker" | "info" | "warning";
   status?: "dismissed" | "in_review" | "open" | "resolved";
@@ -178,28 +189,41 @@ export async function listReviewExceptions(input: {
       ruleResult: {
         employeeRunRecord: input.employee
           ? {
-              OR: [
+              AND: [
                 {
-                  employeeDisplayName: {
-                    contains: input.employee,
-                    mode: "insensitive",
-                  },
+                  OR: [
+                    {
+                      employeeDisplayName: {
+                        contains: input.employee,
+                        mode: "insensitive",
+                      },
+                    },
+                    {
+                      employeeExternalId: {
+                        contains: input.employee,
+                        mode: "insensitive",
+                      },
+                    },
+                    {
+                      employeeNumber: {
+                        contains: input.employee,
+                        mode: "insensitive",
+                      },
+                    },
+                  ],
                 },
-                {
-                  employeeExternalId: {
-                    contains: input.employee,
-                    mode: "insensitive",
-                  },
-                },
-                {
-                  employeeNumber: {
-                    contains: input.employee,
-                    mode: "insensitive",
-                  },
-                },
+                input.reviewSnapshotVersion !== undefined
+                  ? {
+                      reviewSnapshotVersion: input.reviewSnapshotVersion,
+                    }
+                  : {},
               ],
             }
-          : undefined,
+          : input.reviewSnapshotVersion !== undefined
+            ? {
+                reviewSnapshotVersion: input.reviewSnapshotVersion,
+              }
+            : undefined,
         ruleCode: input.ruleCode,
         severity: input.severity,
       },

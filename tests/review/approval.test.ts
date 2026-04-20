@@ -5,6 +5,9 @@ const prismaMock = vi.hoisted(() => ({
     create: vi.fn(),
     findMany: vi.fn(),
   },
+  payRun: {
+    findFirst: vi.fn(),
+  },
   reviewException: {
     count: vi.fn(),
   },
@@ -23,8 +26,12 @@ describe("pay run approval workflow", () => {
   beforeEach(() => {
     prismaMock.approvalEvent.create.mockReset();
     prismaMock.approvalEvent.findMany.mockReset();
+    prismaMock.payRun.findFirst.mockReset();
     prismaMock.reviewException.count.mockReset();
     prismaMock.approvalEvent.findMany.mockResolvedValue([]);
+    prismaMock.payRun.findFirst.mockResolvedValue({
+      activeReviewSnapshotVersion: 2,
+    });
   });
 
   it("summarizes approval state and blocker gating from immutable events plus mutable exception state", async () => {
@@ -38,6 +45,7 @@ describe("pay run approval workflow", () => {
         eventType: "submitted",
         id: "event_1",
         note: "Ready for approver review.",
+        reviewSnapshotVersion: 2,
       },
     ]);
 
@@ -63,6 +71,11 @@ describe("pay run approval workflow", () => {
         reviewStatus: {
           in: ["open", "in_review"],
         },
+        ruleResult: {
+          employeeRunRecord: {
+            reviewSnapshotVersion: 2,
+          },
+        },
       },
     });
     expect(prismaMock.reviewException.count).toHaveBeenNthCalledWith(2, {
@@ -74,6 +87,9 @@ describe("pay run approval workflow", () => {
           in: ["open", "in_review"],
         },
         ruleResult: {
+          employeeRunRecord: {
+            reviewSnapshotVersion: 2,
+          },
           severity: "blocker",
         },
       },
@@ -89,6 +105,7 @@ describe("pay run approval workflow", () => {
         eventType: "submitted",
         id: "event_submitted",
         note: "Ready for approver review.",
+        reviewSnapshotVersion: 2,
       },
     ]);
 
@@ -115,6 +132,7 @@ describe("pay run approval workflow", () => {
         eventType: "submitted",
         id: "event_submitted",
         note: "Ready for approver review.",
+        reviewSnapshotVersion: 2,
       },
     ]);
     prismaMock.approvalEvent.create.mockResolvedValue({
@@ -139,6 +157,7 @@ describe("pay run approval workflow", () => {
         note: "All blocker exceptions resolved in drilldown.",
         organizationId: "org_123",
         payRunId: "run_123",
+        reviewSnapshotVersion: 2,
       },
     });
   });
@@ -182,6 +201,7 @@ describe("pay run approval workflow", () => {
         eventType: "submitted",
         id: "event_submitted",
         note: null,
+        reviewSnapshotVersion: 2,
       },
     ]);
 

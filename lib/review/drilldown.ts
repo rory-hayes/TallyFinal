@@ -272,19 +272,20 @@ export async function findEmployeeReviewDrilldown(input: {
   employeeRunRecordId: string;
   organizationId: string;
   payRunId: string;
+  reviewSnapshotVersion?: number;
 }) {
-  const currentRecord = await prisma.employeeRunRecord.findFirst({
+  const record = await prisma.employeeRunRecord.findFirst({
     where: {
       clientId: input.clientId,
       id: input.employeeRunRecordId,
       organizationId: input.organizationId,
       payRunId: input.payRunId,
-      recordScope: "current",
+      reviewSnapshotVersion: input.reviewSnapshotVersion,
     },
     include: employeeReviewDrilldownInclude,
   });
 
-  if (!currentRecord) {
+  if (!record) {
     return null;
   }
 
@@ -294,7 +295,7 @@ export async function findEmployeeReviewDrilldown(input: {
       organizationId: input.organizationId,
       payRunId: input.payRunId,
       ruleResult: {
-        employeeRunRecordId: currentRecord.id,
+        employeeRunRecordId: record.id,
       },
     },
     include: reviewExceptionDrilldownInclude,
@@ -310,19 +311,30 @@ export async function findEmployeeReviewDrilldown(input: {
     ],
   });
 
+  const currentRecord = record.recordScope === "current" ? record : null;
   const previousRecord =
-    currentRecord.currentEmployeeMatch?.previousEmployeeRunRecord ?? null;
+    record.recordScope === "current"
+      ? record.currentEmployeeMatch?.previousEmployeeRunRecord ?? null
+      : record;
 
   return {
     currentRecord,
     employeeComparisonRows: buildEmployeeComparisonRows({
-      currentRecord: {
-        employeeDisplayName: currentRecord.employeeDisplayName,
-        employeeExternalId: currentRecord.employeeExternalId,
-        employeeNumber: currentRecord.employeeNumber,
-        grossPay: currentRecord.grossPay?.toString() ?? null,
-        netPay: currentRecord.netPay?.toString() ?? null,
-      },
+      currentRecord: currentRecord
+        ? {
+            employeeDisplayName: currentRecord.employeeDisplayName,
+            employeeExternalId: currentRecord.employeeExternalId,
+            employeeNumber: currentRecord.employeeNumber,
+            grossPay: currentRecord.grossPay?.toString() ?? null,
+            netPay: currentRecord.netPay?.toString() ?? null,
+          }
+        : {
+            employeeDisplayName: "",
+            employeeExternalId: null,
+            employeeNumber: null,
+            grossPay: null,
+            netPay: null,
+          },
       previousRecord: previousRecord
         ? {
             employeeDisplayName: previousRecord.employeeDisplayName,
@@ -335,12 +347,13 @@ export async function findEmployeeReviewDrilldown(input: {
     }),
     exceptions,
     payComponentComparisonRows: buildPayComponentComparisonRows({
-      currentComponents: currentRecord.payComponents.map((component) => ({
-        amount: component.amount.toString(),
-        category: component.category,
-        componentCode: component.componentCode,
-        componentLabel: component.componentLabel,
-      })),
+      currentComponents:
+        currentRecord?.payComponents.map((component) => ({
+          amount: component.amount.toString(),
+          category: component.category,
+          componentCode: component.componentCode,
+          componentLabel: component.componentLabel,
+        })) ?? [],
       previousComponents:
         previousRecord?.payComponents.map((component) => ({
           amount: component.amount.toString(),

@@ -2,7 +2,9 @@ import { describe, expect, it } from "vitest";
 
 import {
   createServiceStatusSnapshot,
+  hasSupabaseServiceRoleKey,
   readAppEnvironment,
+  requireSupabaseAdminEnvironment,
 } from "../lib/env";
 
 describe("readAppEnvironment", () => {
@@ -65,5 +67,33 @@ describe("createServiceStatusSnapshot", () => {
         status: "configured",
       },
     ]);
+  });
+});
+
+describe("requireSupabaseAdminEnvironment", () => {
+  it("returns the project URL and service role key for detached background work", () => {
+    expect(
+      requireSupabaseAdminEnvironment({
+        NEXT_PUBLIC_SUPABASE_ANON_KEY: "anon-key",
+        NEXT_PUBLIC_SUPABASE_URL: "https://example.supabase.co",
+        SUPABASE_SERVICE_ROLE_KEY: "service-role-key",
+      }),
+    ).toEqual({
+      serviceRoleKey: "service-role-key",
+      url: "https://example.supabase.co",
+    });
+  });
+
+  it("reports whether the service role key is configured", () => {
+    expect(
+      hasSupabaseServiceRoleKey({
+        SUPABASE_SERVICE_ROLE_KEY: "service-role-key",
+      }),
+    ).toBe(true);
+    expect(
+      hasSupabaseServiceRoleKey({
+        SUPABASE_SERVICE_ROLE_KEY: "",
+      }),
+    ).toBe(false);
   });
 });

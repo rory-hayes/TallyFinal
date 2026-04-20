@@ -14,6 +14,7 @@ export type PayRunApprovalSummary = {
     eventType: "approved" | "rejected" | "reopened" | "submitted";
     id: string;
     note: string | null;
+    reviewSnapshotVersion: number | null;
   }>;
   latestEvent:
     | {
@@ -22,6 +23,7 @@ export type PayRunApprovalSummary = {
         eventType: "approved" | "rejected" | "reopened" | "submitted";
         id: string;
         note: string | null;
+        reviewSnapshotVersion: number | null;
       }
     | null;
 };
@@ -43,11 +45,13 @@ function actionToEventType(action: PayRunApprovalAction) {
 }
 
 function deriveApprovalState(
-  latestEventType: PayRunApprovalSummary["latestEvent"] extends infer T
-    ? T extends { eventType: infer E }
-      ? E
-      : never
-    : never,
+  latestEventType:
+    | (PayRunApprovalSummary["latestEvent"] extends infer T
+        ? T extends { eventType: infer E }
+          ? E
+          : never
+        : never)
+    | undefined,
 ) {
   if (latestEventType === "approved") {
     return "approved" as const;
@@ -64,12 +68,14 @@ async function getLatestApprovalEvent(input: {
   clientId: string;
   organizationId: string;
   payRunId: string;
+  reviewSnapshotVersion: number;
 }) {
   const [latestEvent] = await prisma.approvalEvent.findMany({
     where: {
       clientId: input.clientId,
       organizationId: input.organizationId,
       payRunId: input.payRunId,
+      reviewSnapshotVersion: input.reviewSnapshotVersion,
     },
     orderBy: {
       createdAt: "desc",
@@ -85,6 +91,17 @@ export async function getPayRunApprovalSummary(input: {
   organizationId: string;
   payRunId: string;
 }): Promise<PayRunApprovalSummary> {
+  const payRun = await prisma.payRun.findFirst({
+    where: {
+      clientId: input.clientId,
+      id: input.payRunId,
+      organizationId: input.organizationId,
+    },
+    select: {
+      activeReviewSnapshotVersion: true,
+    },
+  });
+  const activeReviewSnapshotVersion = payRun?.activeReviewSnapshotVersion ?? 0;
   const [activeExceptionCount, blockingExceptionCount, events] =
     await Promise.all([
       prisma.reviewException.count({
@@ -94,6 +111,11 @@ export async function getPayRunApprovalSummary(input: {
           payRunId: input.payRunId,
           reviewStatus: {
             in: ["open", "in_review"],
+          },
+          ruleResult: {
+            employeeRunRecord: {
+              reviewSnapshotVersion: activeReviewSnapshotVersion,
+            },
           },
         },
       }),
@@ -106,6 +128,9 @@ export async function getPayRunApprovalSummary(input: {
             in: ["open", "in_review"],
           },
           ruleResult: {
+            employeeRunRecord: {
+              reviewSnapshotVersion: activeReviewSnapshotVersion,
+            },
             severity: "blocker",
           },
         },
@@ -122,7 +147,10 @@ export async function getPayRunApprovalSummary(input: {
       }),
     ]);
 
-  const latestEvent = events[0] ?? null;
+  const latestEvent =
+    events.find(
+      (event) => event.reviewSnapshotVersion === activeReviewSnapshotVersion,
+    ) ?? null;
 
   return {
     activeExceptionCount,
@@ -147,6 +175,26 @@ export async function recordPayRunApprovalEvent(input: {
   }
 
   const trimmedNote = input.note?.trim();
+  const payRun = await prisma.payRun.findFirst({
+    where: {
+      clientId: input.clientId,
+      id: input.payRunId,
+      organizationId: input.organizationId,
+    },
+    select: {
+      activeReviewSnapshotVersion: true,
+    },
+  });
+  const activeReviewSnapshotVersion = payRun?.activeReviewSnapshotVersion ?? 0;
+
+  if (
+    activeReviewSnapshotVersion < 1 &&
+    (input.action === "submit" || input.action === "approve")
+  ) {
+    throw new Error(
+      "Process the current and previous payroll files before using approval actions.",
+    );
+  }
 
   if (
     (input.action === "reject" || input.action === "reopen") &&
@@ -159,6 +207,7 @@ export async function recordPayRunApprovalEvent(input: {
     clientId: input.clientId,
     organizationId: input.organizationId,
     payRunId: input.payRunId,
+    reviewSnapshotVersion: activeReviewSnapshotVersion,
   });
   const currentState = deriveApprovalState(latestEvent?.eventType);
 
@@ -180,6 +229,9 @@ export async function recordPayRunApprovalEvent(input: {
           in: ["open", "in_review"],
         },
         ruleResult: {
+          employeeRunRecord: {
+            reviewSnapshotVersion: activeReviewSnapshotVersion,
+          },
           severity: "blocker",
         },
       },
@@ -208,6 +260,7 @@ export async function recordPayRunApprovalEvent(input: {
       note: trimmedNote,
       organizationId: input.organizationId,
       payRunId: input.payRunId,
+      reviewSnapshotVersion: activeReviewSnapshotVersion,
     },
   });
 }

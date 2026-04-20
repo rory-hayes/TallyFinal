@@ -2,6 +2,8 @@ import { NextRequest } from "next/server";
 import { z } from "zod";
 
 import { requireAuthenticatedUser } from "@/lib/auth/session";
+import { findClientForOrganization } from "@/lib/clients/service";
+import { findPayRunForClient } from "@/lib/pay-runs/service";
 import {
   bulkAssignReviewExceptions,
   bulkSetReviewExceptionStatus,
@@ -64,11 +66,45 @@ export async function GET(request: NextRequest) {
     );
   }
 
-  const exceptions = await listReviewExceptions({
+  const client = await findClientForOrganization({
+    organizationId: organizationContext.organization.id,
     clientId,
+  });
+
+  if (!client) {
+    return Response.json(
+      {
+        error: "Client access denied.",
+      },
+      {
+        status: 403,
+      },
+    );
+  }
+
+  const payRun = await findPayRunForClient({
+    organizationId: organizationContext.organization.id,
+    clientId: client.id,
+    payRunId,
+  });
+
+  if (!payRun) {
+    return Response.json(
+      {
+        error: "Pay run access denied.",
+      },
+      {
+        status: 403,
+      },
+    );
+  }
+
+  const exceptions = await listReviewExceptions({
+    clientId: client.id,
     employee: searchParams.get("employee")?.trim() || undefined,
     organizationId: organizationContext.organization.id,
-    payRunId,
+    payRunId: payRun.id,
+    reviewSnapshotVersion: payRun.activeReviewSnapshotVersion,
     ruleCode: searchParams.get("ruleCode")?.trim() || undefined,
     severity: severityValue
       ? severitySchema.safeParse(severityValue).data

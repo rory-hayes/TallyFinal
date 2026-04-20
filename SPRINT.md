@@ -53,6 +53,7 @@ The first sprint consists of:
 - Users can preview and map uploaded files.
 - The canonical reviewer data model exists in the database schema.
 - A first end-to-end reviewer slice exists from import through exception triage and approval gating.
+- Pilot hardening keeps exports secondary, reruns explicit, and reviewer throughput practical.
 
 ## Explicit Exclusions
 - payroll calculations

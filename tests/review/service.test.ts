@@ -68,6 +68,7 @@ describe("canonical reviewer domain persistence", () => {
       organizationId: "org_123",
       payRunId: "run_123",
       recordScope: "current",
+      sourceRowNumber: 14,
       sourceFileId: "source_123",
     });
 
@@ -81,6 +82,7 @@ describe("canonical reviewer domain persistence", () => {
         organizationId: "org_123",
         payRunId: "run_123",
         recordScope: "current",
+        sourceRowNumber: 14,
         sourceFileId: "source_123",
       },
     });

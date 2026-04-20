@@ -12,6 +12,8 @@ export async function createEmployeeRunRecord(input: {
   organizationId: string;
   payRunId: string;
   recordScope: "current" | "previous";
+  reviewSnapshotVersion?: number;
+  sourceRowNumber: number;
   sourceFileId: string;
 }) {
   return prisma.employeeRunRecord.create({
@@ -25,7 +27,9 @@ export async function createEmployeeRunRecord(input: {
       organizationId: input.organizationId,
       payRunId: input.payRunId,
       recordScope: input.recordScope,
+      reviewSnapshotVersion: input.reviewSnapshotVersion,
       sourceFileId: input.sourceFileId,
+      sourceRowNumber: input.sourceRowNumber,
     },
   });
 }

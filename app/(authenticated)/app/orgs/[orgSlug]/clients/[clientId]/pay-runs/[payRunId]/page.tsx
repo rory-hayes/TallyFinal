@@ -4,6 +4,7 @@ import { notFound, redirect } from "next/navigation";
 import { SourceFileMappingForm } from "@/components/pay-runs/source-file-mapping-form";
 import { SourceFileUploadForm } from "@/components/pay-runs/source-file-upload-form";
 import { PayRunApprovalPanel } from "@/components/review/pay-run-approval-panel";
+import { PayRunProcessingPanel } from "@/components/review/pay-run-processing-panel";
 import { PayRunReconciliationPanel } from "@/components/review/pay-run-reconciliation-panel";
 import { ReviewQueueWorkspace } from "@/components/review/review-queue-workspace";
 import { Badge } from "@/components/ui/badge";
@@ -30,6 +31,7 @@ import {
   findPayRunForClient,
   listPayRunsForClient,
 } from "@/lib/pay-runs/service";
+import { getPayRunReviewProcessingSummary } from "@/lib/pay-runs/processing";
 import { formatSourceFileKindLabel } from "@/lib/pay-runs/source-files";
 import { getPayRunApprovalSummary } from "@/lib/review/approval";
 import { listReviewExceptions } from "@/lib/review/exceptions";
@@ -107,6 +109,7 @@ export default async function PayRunDetailPage({
     reviewAssignees,
     approvalSummary,
     reconciliationSummary,
+    reviewProcessingSummary,
   ] =
     await Promise.all([
       listPayRunsForClient({
@@ -121,6 +124,7 @@ export default async function PayRunDetailPage({
         clientId: client.id,
         organizationId: organizationContext.organization.id,
         payRunId: payRun.id,
+        reviewSnapshotVersion: payRun.activeReviewSnapshotVersion,
       }),
       listOrganizationReviewAssignees(organizationContext.organization.id),
       getPayRunApprovalSummary({
@@ -129,6 +133,11 @@ export default async function PayRunDetailPage({
         payRunId: payRun.id,
       }),
       listPayRunReconciliationSummary({
+        clientId: client.id,
+        organizationId: organizationContext.organization.id,
+        payRunId: payRun.id,
+      }),
+      getPayRunReviewProcessingSummary({
         clientId: client.id,
         organizationId: organizationContext.organization.id,
         payRunId: payRun.id,
@@ -197,6 +206,14 @@ export default async function PayRunDetailPage({
         exceptions={reviewExceptions}
         orgSlug={orgSlug}
         payRunId={payRun.id}
+      />
+
+      <PayRunProcessingPanel
+        approvalSummary={approvalSummary}
+        clientId={client.id}
+        orgSlug={orgSlug}
+        payRunId={payRun.id}
+        summary={reviewProcessingSummary}
       />
 
       <PayRunReconciliationPanel rows={reconciliationSummary} />
@@ -492,7 +509,15 @@ export default async function PayRunDetailPage({
                               )} KB`
                             : "Size pending"}
                           {sourceFile.replacementOfId
-                            ? ` - replaces ${sourceFile.replacementOfId}`
+                            ? (() => {
+                                const replacedSourceFile = sourceFilesById.get(
+                                  sourceFile.replacementOfId,
+                                );
+
+                                return replacedSourceFile
+                                  ? ` - replaces v${replacedSourceFile.version} ${replacedSourceFile.originalFilename}`
+                                  : ` - replaces ${sourceFile.replacementOfId}`;
+                              })()
                             : ""}
                         </p>
                       </div>

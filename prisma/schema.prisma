@@ -89,6 +89,13 @@ enum ApprovalEventType {
   reopened
 }
 
+enum ReviewProcessingRunStatus {
+  queued
+  processing
+  completed
+  failed
+}
+
 enum ReconciliationCheckKind {
   payroll_to_journal
   payroll_to_payment
@@ -121,6 +128,7 @@ model Organization {
   reviewExceptions   ReviewException[]
   exceptionComments  ExceptionComment[]
   approvalEvents     ApprovalEvent[]
+  reviewProcessingRuns ReviewProcessingRun[]
   journalEntries     JournalEntry[]
   paymentRecords     PaymentRecord[]
   reconciliationChecks ReconciliationCheck[]
@@ -168,6 +176,7 @@ model Client {
   reviewExceptions     ReviewException[]
   exceptionComments    ExceptionComment[]
   approvalEvents       ApprovalEvent[]
+  reviewProcessingRuns ReviewProcessingRun[]
   journalEntries       JournalEntry[]
   paymentRecords       PaymentRecord[]
   reconciliationChecks ReconciliationCheck[]
@@ -187,6 +196,7 @@ model PayRun {
   periodEnd            DateTime
   payDate              DateTime?
   status               PayRunStatus @default(draft)
+  activeReviewSnapshotVersion Int   @default(0)
   createdByUserId      String
   updatedByUserId      String?
   createdAt            DateTime     @default(now())
@@ -203,6 +213,7 @@ model PayRun {
   reviewExceptions     ReviewException[]
   exceptionComments    ExceptionComment[]
   approvalEvents       ApprovalEvent[]
+  reviewProcessingRuns ReviewProcessingRun[]
   journalEntries       JournalEntry[]
   paymentRecords       PaymentRecord[]
   reconciliationChecks ReconciliationCheck[]
@@ -304,6 +315,8 @@ model EmployeeRunRecord {
   payRunId            String
   sourceFileId        String
   recordScope         EmployeeRecordScope
+  reviewSnapshotVersion Int               @default(0)
+  sourceRowNumber     Int
   employeeExternalId  String?
   employeeNumber      String?
   employeeDisplayName String
@@ -322,8 +335,10 @@ model EmployeeRunRecord {
   ruleResults         RuleResult[]
 
   @@index([organizationId, payRunId, recordScope])
+  @@index([organizationId, payRunId, reviewSnapshotVersion, recordScope])
   @@index([sourceFileId, recordScope])
   @@index([clientId, payRunId])
+  @@unique([sourceFileId, reviewSnapshotVersion, recordScope, sourceRowNumber])
 }
 
 model EmployeePayComponent {
@@ -480,6 +495,7 @@ model ApprovalEvent {
   payRunId       String
   actorUserId    String
   eventType      ApprovalEventType
+  reviewSnapshotVersion Int?
   note           String?
   createdAt      DateTime          @default(now())
   organization   Organization      @relation(fields: [organizationId], references: [id], onDelete: Cascade)
@@ -487,7 +503,33 @@ model ApprovalEvent {
   payRun         PayRun            @relation(fields: [payRunId, organizationId], references: [id, organizationId], onDelete: Cascade)
 
   @@index([organizationId, payRunId, createdAt])
+  @@index([organizationId, payRunId, reviewSnapshotVersion, createdAt])
   @@index([clientId, payRunId])
+}
+
+model ReviewProcessingRun {
+  id                      String                  @id @default(cuid())
+  organizationId          String
+  clientId                String
+  payRunId                String
+  currentSourceFileId     String
+  previousSourceFileId    String
+  currentMappingSignature String
+  previousMappingSignature String
+  initiatedByUserId       String?
+  triggerRunId            String?
+  status                  ReviewProcessingRunStatus @default(queued)
+  resultingSnapshotVersion Int?
+  errorMessage            String?
+  requestedAt             DateTime                @default(now())
+  startedAt               DateTime?
+  completedAt             DateTime?
+  organization            Organization            @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  client                  Client                  @relation(fields: [clientId, organizationId], references: [id, organizationId], onDelete: Cascade)
+  payRun                  PayRun                  @relation(fields: [payRunId, organizationId], references: [id, organizationId], onDelete: Cascade)
+
+  @@index([organizationId, payRunId, requestedAt])
+  @@index([payRunId, status, requestedAt])
 }
 
 model JournalEntry {

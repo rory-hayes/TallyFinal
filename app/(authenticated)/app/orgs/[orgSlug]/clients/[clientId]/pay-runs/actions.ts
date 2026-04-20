@@ -14,6 +14,7 @@ import {
   findPayRunForClient,
   registerSourceFileForPayRun,
 } from "@/lib/pay-runs/service";
+import { queuePayRunReviewProcessing } from "@/lib/pay-runs/processing";
 import { SOURCE_FILE_KINDS } from "@/lib/pay-runs/source-files";
 import { normalizeAndPersistReconciliationSourceFile } from "@/lib/reconciliation/service";
 import { recordPayRunApprovalEvent } from "@/lib/review/approval";
@@ -482,6 +483,25 @@ export async function saveSourceFileMappingAction(
 
     return {
       notice: `${mappingNotice} ${reconciliationResult.normalizedRowCount} ${sourceFile.kind} rows normalized and secondary reconciliation refreshed.`,
+      ok: true as const,
+    };
+  }
+
+  if (
+    sourceFile?.kind === "current_payroll" ||
+    sourceFile?.kind === "previous_payroll"
+  ) {
+    const processingResult = await queuePayRunReviewProcessing({
+      clientId: context.client.id,
+      initiatedByUserId: context.user.id,
+      organizationId: context.organizationContext.organization.id,
+      payRunId: context.payRun.id,
+    });
+
+    return {
+      notice: processingResult.ok
+        ? `${mappingNotice} ${processingResult.notice}`
+        : `${mappingNotice} ${processingResult.error}`,
       ok: true as const,
     };
   }

@@ -20,6 +20,12 @@ function hasValue(value: string | undefined): value is string {
   return Boolean(value && value.trim().length > 0);
 }
 
+export function hasSupabaseServiceRoleKey(
+  env: EnvironmentSource = process.env,
+) {
+  return hasValue(env.SUPABASE_SERVICE_ROLE_KEY);
+}
+
 export function readAppEnvironment(
   env: EnvironmentSource = process.env,
 ): AppEnvironment {
@@ -84,6 +90,24 @@ export function requireSupabaseEnvironment(
   return {
     url: url.trim(),
     anonKey: anonKey.trim(),
+  };
+}
+
+export function requireSupabaseAdminEnvironment(
+  env: EnvironmentSource = process.env,
+) {
+  const { url } = requireSupabaseEnvironment(env);
+  const serviceRoleKey = env.SUPABASE_SERVICE_ROLE_KEY;
+
+  if (!hasValue(serviceRoleKey)) {
+    throw new Error(
+      "SUPABASE_SERVICE_ROLE_KEY is missing. Set it before running background storage or export jobs.",
+    );
+  }
+
+  return {
+    serviceRoleKey: serviceRoleKey.trim(),
+    url,
   };
 }
 

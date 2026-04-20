@@ -101,6 +101,7 @@ export default async function EmployeeReviewDrilldownPage({
     employeeRunRecordId,
     organizationId: organizationContext.organization.id,
     payRunId: payRun.id,
+    reviewSnapshotVersion: payRun.activeReviewSnapshotVersion,
   });
 
   if (!drilldown) {
@@ -108,6 +109,7 @@ export default async function EmployeeReviewDrilldownPage({
   }
 
   const reviewMutationAllowed = canManageReviewExceptions(organizationContext.role);
+  const subjectRecord = drilldown.currentRecord ?? drilldown.previousRecord;
   const previousRecord = drilldown.previousRecord;
 
   return (
@@ -116,12 +118,12 @@ export default async function EmployeeReviewDrilldownPage({
         <div className="space-y-2">
           <div className="flex flex-wrap items-center gap-3">
             <h1 className="text-3xl font-semibold tracking-tight text-foreground">
-              {drilldown.currentRecord.employeeDisplayName}
+              {subjectRecord?.employeeDisplayName ?? "Employee review"}
             </h1>
             <Badge variant="outline" className="rounded-md">
-              Current run
+              {drilldown.currentRecord ? "Current run" : "Previous run"}
             </Badge>
-            {drilldown.currentRecord.currentEmployeeMatch?.matchMethod ? (
+            {drilldown.currentRecord?.currentEmployeeMatch?.matchMethod ? (
               <Badge variant="outline" className="rounded-md capitalize">
                 {drilldown.currentRecord.currentEmployeeMatch.matchMethod.replace(
                   /_/g,
@@ -266,90 +268,99 @@ export default async function EmployeeReviewDrilldownPage({
       </section>
 
       <section className="grid gap-4 xl:grid-cols-2">
-        <Card className="rounded-md border-border/80">
-          <CardHeader>
-            <CardTitle>Current-run evidence</CardTitle>
+          <Card className="rounded-md border-border/80">
+            <CardHeader>
+              <CardTitle>Current-run evidence</CardTitle>
             <CardDescription>
               Canonical employee values and normalized components traced back to
               current source rows.
             </CardDescription>
           </CardHeader>
           <CardContent className="space-y-4">
-            <div className="space-y-2">
-              <p className="text-sm font-medium text-foreground">Record lineage</p>
-              {drilldown.currentRecord.sourceRowRefs.length ? (
+            {drilldown.currentRecord ? (
+              <>
                 <div className="space-y-2">
-                  {drilldown.currentRecord.sourceRowRefs.map((sourceRowRef) => (
-                    <div
-                      key={sourceRowRef.id}
-                      className="rounded-md border border-border/80 px-3 py-2"
-                    >
-                      <p className="text-sm font-medium text-foreground">
-                        {sourceRowRef.canonicalFieldKey || "Record field"}
-                      </p>
-                      <p className="text-xs text-muted-foreground">
-                        {sourceRowRef.sourceFile.kind} · row {sourceRowRef.rowNumber}
-                      </p>
-                      <p className="mt-1 text-sm text-foreground">
-                        {sourceRowRef.columnHeader || "Source column"}:{" "}
-                        {sourceRowRef.columnValue || "—"}
-                      </p>
-                    </div>
-                  ))}
-                </div>
-              ) : (
-                <p className="text-sm text-muted-foreground">
-                  No record-level source row refs were found for the current
-                  employee record.
-                </p>
-              )}
-            </div>
-
-            <div className="space-y-2">
-              <p className="text-sm font-medium text-foreground">
-                Component lineage
-              </p>
-              {drilldown.currentRecord.payComponents.length ? (
-                <div className="space-y-2">
-                  {drilldown.currentRecord.payComponents.map((component) => (
-                    <div
-                      key={component.id}
-                      className="rounded-md border border-border/80 px-3 py-2"
-                    >
-                      <div className="flex flex-wrap items-center gap-2">
-                        <p className="text-sm font-medium text-foreground">
-                          {component.componentLabel}
-                        </p>
-                        <Badge variant="outline" className="rounded-md capitalize">
-                          {component.category.replace(/_/g, " ")}
-                        </Badge>
-                      </div>
-                      {component.sourceRowRefs.length ? (
-                        component.sourceRowRefs.map((sourceRowRef) => (
-                          <p
-                            key={sourceRowRef.id}
-                            className="mt-1 text-xs text-muted-foreground"
-                          >
-                            Row {sourceRowRef.rowNumber}:{" "}
-                            {sourceRowRef.columnHeader || "Source column"} ={" "}
+                  <p className="text-sm font-medium text-foreground">Record lineage</p>
+                  {drilldown.currentRecord.sourceRowRefs.length ? (
+                    <div className="space-y-2">
+                      {drilldown.currentRecord.sourceRowRefs.map((sourceRowRef) => (
+                        <div
+                          key={sourceRowRef.id}
+                          className="rounded-md border border-border/80 px-3 py-2"
+                        >
+                          <p className="text-sm font-medium text-foreground">
+                            {sourceRowRef.canonicalFieldKey || "Record field"}
+                          </p>
+                          <p className="text-xs text-muted-foreground">
+                            {sourceRowRef.sourceFile.kind} · row {sourceRowRef.rowNumber}
+                          </p>
+                          <p className="mt-1 text-sm text-foreground">
+                            {sourceRowRef.columnHeader || "Source column"}:{" "}
                             {sourceRowRef.columnValue || "—"}
                           </p>
-                        ))
-                      ) : (
-                        <p className="mt-1 text-xs text-muted-foreground">
-                          No component source row refs were found.
-                        </p>
-                      )}
+                        </div>
+                      ))}
                     </div>
-                  ))}
+                  ) : (
+                    <p className="text-sm text-muted-foreground">
+                      No record-level source row refs were found for the current
+                      employee record.
+                    </p>
+                  )}
                 </div>
-              ) : (
-                <p className="text-sm text-muted-foreground">
-                  No normalized current-run components are attached to this
-                  employee record.
-                </p>
-              )}
-            </div>
+
+                <div className="space-y-2">
+                  <p className="text-sm font-medium text-foreground">
+                    Component lineage
+                  </p>
+                  {drilldown.currentRecord.payComponents.length ? (
+                    <div className="space-y-2">
+                      {drilldown.currentRecord.payComponents.map((component) => (
+                        <div
+                          key={component.id}
+                          className="rounded-md border border-border/80 px-3 py-2"
+                        >
+                          <div className="flex flex-wrap items-center gap-2">
+                            <p className="text-sm font-medium text-foreground">
+                              {component.componentLabel}
+                            </p>
+                            <Badge variant="outline" className="rounded-md capitalize">
+                              {component.category.replace(/_/g, " ")}
+                            </Badge>
+                          </div>
+                          {component.sourceRowRefs.length ? (
+                            component.sourceRowRefs.map((sourceRowRef) => (
+                              <p
+                                key={sourceRowRef.id}
+                                className="mt-1 text-xs text-muted-foreground"
+                              >
+                                Row {sourceRowRef.rowNumber}:{" "}
+                                {sourceRowRef.columnHeader || "Source column"} ={" "}
+                                {sourceRowRef.columnValue || "—"}
+                              </p>
+                            ))
+                          ) : (
+                            <p className="mt-1 text-xs text-muted-foreground">
+                              No component source row refs were found.
+                            </p>
+                          )}
+                        </div>
+                      ))}
+                    </div>
+                  ) : (
+                    <p className="text-sm text-muted-foreground">
+                      No normalized current-run components are attached to this
+                      employee record.
+                    </p>
+                  )}
+                </div>
+              </>
+            ) : (
+              <p className="text-sm text-muted-foreground">
+                This exception is attached to a previous-run employee record, so
+                there is no current-run evidence for this drilldown.
+              </p>
+            )}
           </CardContent>
         </Card>
 

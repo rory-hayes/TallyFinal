@@ -157,25 +157,30 @@ describe("review exception lifecycle", () => {
         reviewStatus: "open",
         ruleResult: {
           employeeRunRecord: {
-            OR: [
+            AND: [
               {
-                employeeDisplayName: {
-                  contains: "Aoife",
-                  mode: "insensitive",
-                },
+                OR: [
+                  {
+                    employeeDisplayName: {
+                      contains: "Aoife",
+                      mode: "insensitive",
+                    },
+                  },
+                  {
+                    employeeExternalId: {
+                      contains: "Aoife",
+                      mode: "insensitive",
+                    },
+                  },
+                  {
+                    employeeNumber: {
+                      contains: "Aoife",
+                      mode: "insensitive",
+                    },
+                  },
+                ],
               },
-              {
-                employeeExternalId: {
-                  contains: "Aoife",
-                  mode: "insensitive",
-                },
-              },
-              {
-                employeeNumber: {
-                  contains: "Aoife",
-                  mode: "insensitive",
-                },
-              },
+              {},
             ],
           },
           ruleCode: "GROSS_VARIANCE_THRESHOLD",

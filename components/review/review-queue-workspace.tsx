@@ -1,14 +1,16 @@
 "use client";
 
 import Link from "next/link";
-import { useMemo, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { useRouter } from "next/navigation";
 import {
   flexRender,
   getCoreRowModel,
+  getPaginationRowModel,
   getSortedRowModel,
   useReactTable,
   type ColumnDef,
+  type PaginationState,
   type RowSelectionState,
   type SortingState,
 } from "@tanstack/react-table";
@@ -168,6 +170,10 @@ export function ReviewQueueWorkspace({
       id: "updatedAt",
     },
   ]);
+  const [pagination, setPagination] = useState<PaginationState>({
+    pageIndex: 0,
+    pageSize: 50,
+  });
   const [selectedAssigneeUserId, setSelectedAssigneeUserId] = useState(
     assignees[0]?.userId ?? "",
   );
@@ -204,6 +210,13 @@ export function ReviewQueueWorkspace({
           : true,
       );
   }, [employeeFilter, exceptions, ruleCodeFilter, severityFilter, statusFilter]);
+
+  useEffect(() => {
+    setPagination((current) => ({
+      ...current,
+      pageIndex: 0,
+    }));
+  }, [employeeFilter, ruleCodeFilter, severityFilter, statusFilter]);
 
   const columns = useMemo<ColumnDef<ReviewExceptionListItem>[]>(
     () => [
@@ -389,11 +402,14 @@ export function ReviewQueueWorkspace({
     data: filteredExceptions,
     enableRowSelection: true,
     getCoreRowModel: getCoreRowModel(),
+    getPaginationRowModel: getPaginationRowModel(),
     getRowId: (row) => row.id,
     getSortedRowModel: getSortedRowModel(),
+    onPaginationChange: setPagination,
     onRowSelectionChange: setRowSelection,
     onSortingChange: setSorting,
     state: {
+      pagination,
       rowSelection,
       sorting,
     },
@@ -524,7 +540,7 @@ export function ReviewQueueWorkspace({
             </p>
           </div>
           <p className="text-sm text-muted-foreground">
-            Showing {filteredExceptions.length} of {summary.totalCount} exceptions
+            Showing {table.getRowModel().rows.length} of {filteredExceptions.length} filtered exceptions
           </p>
         </div>
 
@@ -739,6 +755,48 @@ export function ReviewQueueWorkspace({
               )}
             </TableBody>
           </Table>
+        </div>
+
+        <div className="flex flex-wrap items-center justify-between gap-3">
+          <p className="text-sm text-muted-foreground">
+            Page {table.getState().pagination.pageIndex + 1} of {table.getPageCount() || 1}
+          </p>
+          <div className="flex flex-wrap items-center gap-2">
+            <label className="text-sm text-muted-foreground">
+              Rows
+              <select
+                className="ml-2 h-9 rounded-md border border-input bg-background px-2 text-sm text-foreground"
+                onChange={(event) => table.setPageSize(Number(event.target.value))}
+                value={table.getState().pagination.pageSize}
+              >
+                {[25, 50, 100].map((pageSize) => (
+                  <option key={pageSize} value={pageSize}>
+                    {pageSize}
+                  </option>
+                ))}
+              </select>
+            </label>
+            <Button
+              className="rounded-md"
+              disabled={!table.getCanPreviousPage()}
+              onClick={() => table.previousPage()}
+              size="sm"
+              type="button"
+              variant="outline"
+            >
+              Previous
+            </Button>
+            <Button
+              className="rounded-md"
+              disabled={!table.getCanNextPage()}
+              onClick={() => table.nextPage()}
+              size="sm"
+              type="button"
+              variant="outline"
+            >
+              Next
+            </Button>
+          </div>
         </div>
       </div>
     </section>
