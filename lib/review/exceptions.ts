@@ -5,6 +5,45 @@ import type { ReviewRuleFinding } from "@/lib/review/rules";
 
 type ReviewExceptionStatusAction = "ignore" | "resolve";
 
+const reviewExceptionListInclude =
+  Prisma.validator<Prisma.ReviewExceptionInclude>()({
+    comments: {
+      orderBy: {
+        createdAt: "asc",
+      },
+    },
+    ruleResult: {
+      include: {
+        employeeMatch: {
+          include: {
+            previousEmployeeRunRecord: true,
+          },
+        },
+        employeePayComponent: true,
+        employeeRunRecord: {
+          include: {
+            sourceRowRefs: {
+              orderBy: {
+                rowNumber: "asc",
+              },
+              select: {
+                canonicalFieldKey: true,
+                columnHeader: true,
+                rowNumber: true,
+                sourceFileId: true,
+              },
+              take: 3,
+            },
+          },
+        },
+      },
+    },
+  });
+
+export type ReviewExceptionListItem = Prisma.ReviewExceptionGetPayload<{
+  include: typeof reviewExceptionListInclude;
+}>;
+
 export async function materializeRuleResultsAndExceptions(input: {
   clientId: string;
   findings: ReviewRuleFinding[];
@@ -165,20 +204,7 @@ export async function listReviewExceptions(input: {
         severity: input.severity,
       },
     },
-    include: {
-      comments: {
-        orderBy: {
-          createdAt: "asc",
-        },
-      },
-      ruleResult: {
-        include: {
-          employeeMatch: true,
-          employeePayComponent: true,
-          employeeRunRecord: true,
-        },
-      },
-    },
+    include: reviewExceptionListInclude,
     orderBy: [{ createdAt: "desc" }],
   });
 }
@@ -303,5 +329,71 @@ export async function addReviewExceptionComment(input: {
       payRunId: input.payRunId,
       reviewExceptionId: input.reviewExceptionId,
     },
+  });
+}
+
+export async function bulkAssignReviewExceptions(input: {
+  actorUserId: string;
+  assigneeUserId: string;
+  clientId: string;
+  exceptionIds: string[];
+  organizationId: string;
+  payRunId: string;
+}) {
+  return prisma.$transaction(async (transaction) => {
+    const exceptions = await transaction.reviewException.findMany({
+      where: {
+        clientId: input.clientId,
+        id: {
+          in: input.exceptionIds,
+        },
+        organizationId: input.organizationId,
+        payRunId: input.payRunId,
+      },
+      select: {
+        assigneeUserId: true,
+        id: true,
+      },
+    });
+
+    let updatedExceptionCount = 0;
+    const skippedExceptionIds = input.exceptionIds.filter(
+      (exceptionId) => !exceptions.some((exception) => exception.id === exceptionId),
+    );
+
+    for (const exception of exceptions) {
+      await transaction.reviewException.update({
+        where: {
+          id: exception.id,
+        },
+        data: {
+          assigneeUserId: input.assigneeUserId,
+        },
+      });
+
+      await transaction.exceptionComment.create({
+        data: {
+          authorUserId: input.actorUserId,
+          body: `Exception assigned to ${input.assigneeUserId}.`,
+          clientId: input.clientId,
+          commentType: "audit_log",
+          metadata: {
+            action: "assign",
+            assigneeUserId: input.assigneeUserId,
+            previousAssigneeUserId: exception.assigneeUserId,
+          } as Prisma.InputJsonValue,
+          organizationId: input.organizationId,
+          payRunId: input.payRunId,
+          reviewExceptionId: exception.id,
+        },
+      });
+
+      updatedExceptionCount += 1;
+    }
+
+    return {
+      skippedExceptionIds,
+      updatedExceptionCount,
+    };
   });
 }

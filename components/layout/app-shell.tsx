@@ -33,13 +33,13 @@ export function AppShell({
                 variant="outline"
                 className="rounded-md border-emerald-600/25 bg-emerald-500/10 text-emerald-800"
               >
-                Pay run shell
+                Reviewer queue
               </Badge>
             </div>
             <p className="max-w-2xl text-sm text-muted-foreground">
-              Employee-level payroll review still comes later. This shell now
-              covers signed-in tenancy, client access, pay runs, and source-file
-              lineage.
+              Employee-level payroll review now leads the workspace, with pay
+              runs, source lineage, and triage living in the same tenant-safe
+              flow.
             </p>
           </div>
 

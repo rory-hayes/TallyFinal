@@ -3,6 +3,7 @@ import { notFound, redirect } from "next/navigation";
 
 import { SourceFileMappingForm } from "@/components/pay-runs/source-file-mapping-form";
 import { SourceFileUploadForm } from "@/components/pay-runs/source-file-upload-form";
+import { ReviewQueueWorkspace } from "@/components/review/review-queue-workspace";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import {
@@ -28,8 +29,12 @@ import {
   listPayRunsForClient,
 } from "@/lib/pay-runs/service";
 import { formatSourceFileKindLabel } from "@/lib/pay-runs/source-files";
+import { listReviewExceptions } from "@/lib/review/exceptions";
 import { canManagePayRuns } from "@/lib/tenancy/access";
-import { findOrganizationContextForUser } from "@/lib/tenancy/service";
+import {
+  findOrganizationContextForUser,
+  listOrganizationReviewAssignees,
+} from "@/lib/tenancy/service";
 
 import {
   confirmSourceFileUploadAction,
@@ -87,14 +92,23 @@ export default async function PayRunDetailPage({
     notFound();
   }
 
-  const payRuns = await listPayRunsForClient({
-    organizationId: organizationContext.organization.id,
-    clientId: client.id,
-  });
-  const importWorkspaces = await listImportWorkspacesForPayRun({
-    organizationId: organizationContext.organization.id,
-    payRunId: payRun.id,
-  });
+  const [payRuns, importWorkspaces, reviewExceptions, reviewAssignees] =
+    await Promise.all([
+      listPayRunsForClient({
+        organizationId: organizationContext.organization.id,
+        clientId: client.id,
+      }),
+      listImportWorkspacesForPayRun({
+        organizationId: organizationContext.organization.id,
+        payRunId: payRun.id,
+      }),
+      listReviewExceptions({
+        clientId: client.id,
+        organizationId: organizationContext.organization.id,
+        payRunId: payRun.id,
+      }),
+      listOrganizationReviewAssignees(organizationContext.organization.id),
+    ]);
   const sourceFilesById = new Map(
     payRun.sourceFiles.map((sourceFile) => [sourceFile.id, sourceFile]),
   );
@@ -113,8 +127,8 @@ export default async function PayRunDetailPage({
             </Badge>
           </div>
           <p className="text-sm text-muted-foreground">
-            Upload-first preview and mapping are live here before any canonical
-            normalization starts.
+            Reviewer queue first, with deterministic employee-level exceptions
+            kept separate from mutable triage state.
           </p>
           {resolvedSearchParams.notice ? (
             <p className="text-sm text-emerald-800">
@@ -137,13 +151,21 @@ export default async function PayRunDetailPage({
         </div>
       </section>
 
+      <ReviewQueueWorkspace
+        assignees={reviewAssignees}
+        clientId={client.id}
+        exceptions={reviewExceptions}
+        orgSlug={orgSlug}
+        payRunId={payRun.id}
+      />
+
       <section className="grid gap-4 lg:grid-cols-[minmax(0,1.4fr)_minmax(320px,0.9fr)]">
         <Card className="rounded-md border-border/80">
           <CardHeader>
-            <CardTitle>Pay run details</CardTitle>
+            <CardTitle>Run context</CardTitle>
             <CardDescription>
-              This run belongs to {client.name} and remains tenant-scoped by the
-              current organization membership.
+              Dense triage lives above. These details stay close for quick
+              operational checks and source-file handling.
             </CardDescription>
           </CardHeader>
           <CardContent className="grid gap-4 md:grid-cols-2">
@@ -194,8 +216,8 @@ export default async function PayRunDetailPage({
           <CardHeader>
             <CardTitle>Attach source file</CardTitle>
             <CardDescription>
-              Uploads are registered first, written to Supabase Storage with a
-              signed URL, then confirmed against the file record.
+              Source uploads still preserve lineage and version history without
+              displacing the queue as the primary workspace.
             </CardDescription>
           </CardHeader>
           <CardContent>
@@ -226,11 +248,11 @@ export default async function PayRunDetailPage({
 
       <Card className="rounded-md border-border/80">
         <CardHeader>
-          <CardTitle>Preview and mapping</CardTitle>
+          <CardTitle>Source files and mapping</CardTitle>
           <CardDescription>
-            Uploaded files are previewed first. Operators can inspect headers,
-            review sample rows, and save reusable mappings before normalization
-            exists.
+            Keep the queue moving while still being able to inspect headers,
+            sample rows, and mapping choices when source evidence needs a closer
+            look.
           </CardDescription>
         </CardHeader>
         <CardContent className="space-y-6">
