@@ -4,6 +4,7 @@ import { notFound, redirect } from "next/navigation";
 import { SourceFileMappingForm } from "@/components/pay-runs/source-file-mapping-form";
 import { SourceFileUploadForm } from "@/components/pay-runs/source-file-upload-form";
 import { PayRunApprovalPanel } from "@/components/review/pay-run-approval-panel";
+import { PayRunReconciliationPanel } from "@/components/review/pay-run-reconciliation-panel";
 import { ReviewQueueWorkspace } from "@/components/review/review-queue-workspace";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
@@ -32,6 +33,7 @@ import {
 import { formatSourceFileKindLabel } from "@/lib/pay-runs/source-files";
 import { getPayRunApprovalSummary } from "@/lib/review/approval";
 import { listReviewExceptions } from "@/lib/review/exceptions";
+import { listPayRunReconciliationSummary } from "@/lib/reconciliation/service";
 import {
   canManageApprovalActions,
   canManagePayRuns,
@@ -104,6 +106,7 @@ export default async function PayRunDetailPage({
     reviewExceptions,
     reviewAssignees,
     approvalSummary,
+    reconciliationSummary,
   ] =
     await Promise.all([
       listPayRunsForClient({
@@ -121,6 +124,11 @@ export default async function PayRunDetailPage({
       }),
       listOrganizationReviewAssignees(organizationContext.organization.id),
       getPayRunApprovalSummary({
+        clientId: client.id,
+        organizationId: organizationContext.organization.id,
+        payRunId: payRun.id,
+      }),
+      listPayRunReconciliationSummary({
         clientId: client.id,
         organizationId: organizationContext.organization.id,
         payRunId: payRun.id,
@@ -190,6 +198,8 @@ export default async function PayRunDetailPage({
         orgSlug={orgSlug}
         payRunId={payRun.id}
       />
+
+      <PayRunReconciliationPanel rows={reconciliationSummary} />
 
       <section className="grid gap-4 lg:grid-cols-[minmax(0,1.4fr)_minmax(320px,0.9fr)]">
         <Card className="rounded-md border-border/80">

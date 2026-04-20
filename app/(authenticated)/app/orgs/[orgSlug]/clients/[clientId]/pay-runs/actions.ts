@@ -15,6 +15,7 @@ import {
   registerSourceFileForPayRun,
 } from "@/lib/pay-runs/service";
 import { SOURCE_FILE_KINDS } from "@/lib/pay-runs/source-files";
+import { normalizeAndPersistReconciliationSourceFile } from "@/lib/reconciliation/service";
 import { recordPayRunApprovalEvent } from "@/lib/review/approval";
 import { createSupabaseServerClient } from "@/lib/supabase/server";
 import { findClientForOrganization } from "@/lib/clients/service";
@@ -436,10 +437,57 @@ export async function saveSourceFileMappingAction(
   revalidatePath(`/app/orgs/${orgSlug}/clients/${clientId}/pay-runs`);
   revalidatePath(`/app/orgs/${orgSlug}/clients/${clientId}/pay-runs/${payRunId}`);
 
+  const mappingNotice = result.templateSaved
+    ? "Mapping saved and template updated for future uploads."
+    : "Mapping saved for this upload.";
+  const sourceFile = context.payRun.sourceFiles.find(
+    (candidate) => candidate.id === sourceFileId,
+  );
+
+  if (sourceFile?.kind === "journal" || sourceFile?.kind === "payment") {
+    const supabase = await createSupabaseServerClient();
+    const { data, error } = await supabase.storage
+      .from(sourceFile.storageBucket)
+      .download(sourceFile.storagePath);
+
+    if (error || !data) {
+      return {
+        notice: `${mappingNotice} Secondary reconciliation could not download the source file for normalization yet.`,
+        ok: true as const,
+      };
+    }
+
+    const csvText = new TextDecoder().decode(await data.arrayBuffer());
+    const reconciliationResult = await normalizeAndPersistReconciliationSourceFile({
+      clientId: context.client.id,
+      csvText,
+      mapping: values,
+      organizationId: context.organizationContext.organization.id,
+      payRunId: context.payRun.id,
+      sourceFileId,
+      sourceKind: sourceFile.kind,
+    });
+
+    if (!reconciliationResult.ok) {
+      const firstError = reconciliationResult.errors[0];
+      const errorMessage = firstError
+        ? `${firstError.message}${firstError.rowNumber ? ` (row ${firstError.rowNumber})` : ""}`
+        : "Secondary reconciliation normalization failed.";
+
+      return {
+        notice: `${mappingNotice} ${errorMessage}`,
+        ok: true as const,
+      };
+    }
+
+    return {
+      notice: `${mappingNotice} ${reconciliationResult.normalizedRowCount} ${sourceFile.kind} rows normalized and secondary reconciliation refreshed.`,
+      ok: true as const,
+    };
+  }
+
   return {
-    notice: result.templateSaved
-      ? "Mapping saved and template updated for future uploads."
-      : "Mapping saved for this upload.",
+    notice: mappingNotice,
     ok: true as const,
   };
 }

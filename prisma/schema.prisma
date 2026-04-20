@@ -89,6 +89,17 @@ enum ApprovalEventType {
   reopened
 }
 
+enum ReconciliationCheckKind {
+  payroll_to_journal
+  payroll_to_payment
+}
+
+enum ReconciliationCheckStatus {
+  matched
+  within_tolerance
+  mismatch
+}
+
 model Organization {
   id                 String               @id @default(cuid())
   name               String
@@ -110,6 +121,9 @@ model Organization {
   reviewExceptions   ReviewException[]
   exceptionComments  ExceptionComment[]
   approvalEvents     ApprovalEvent[]
+  journalEntries     JournalEntry[]
+  paymentRecords     PaymentRecord[]
+  reconciliationChecks ReconciliationCheck[]
 }
 
 model OrganizationMember {
@@ -154,6 +168,9 @@ model Client {
   reviewExceptions     ReviewException[]
   exceptionComments    ExceptionComment[]
   approvalEvents       ApprovalEvent[]
+  journalEntries       JournalEntry[]
+  paymentRecords       PaymentRecord[]
+  reconciliationChecks ReconciliationCheck[]
 
   @@unique([organizationId, slug])
   @@unique([id, organizationId])
@@ -186,6 +203,9 @@ model PayRun {
   reviewExceptions     ReviewException[]
   exceptionComments    ExceptionComment[]
   approvalEvents       ApprovalEvent[]
+  journalEntries       JournalEntry[]
+  paymentRecords       PaymentRecord[]
+  reconciliationChecks ReconciliationCheck[]
 
   @@unique([id, organizationId])
   @@index([organizationId, clientId, archivedAt])
@@ -228,6 +248,9 @@ model SourceFile {
   employeeRunRecords EmployeeRunRecord[]
   employeePayComponents EmployeePayComponent[]
   sourceRowRefs      SourceRowRef[]
+  journalEntries     JournalEntry[]
+  paymentRecords     PaymentRecord[]
+  reconciliationChecks ReconciliationCheck[]
 
   @@unique([id, payRunId])
   @@unique([payRunId, kind, version])
@@ -465,4 +488,74 @@ model ApprovalEvent {
 
   @@index([organizationId, payRunId, createdAt])
   @@index([clientId, payRunId])
+}
+
+model JournalEntry {
+  id               String       @id @default(cuid())
+  organizationId   String
+  clientId         String
+  payRunId         String
+  sourceFileId     String
+  rowNumber        Int
+  entryDate        String
+  accountCode      String
+  entryDescription String
+  amount           Decimal      @db.Decimal(18, 2)
+  createdAt        DateTime     @default(now())
+  organization     Organization @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  client           Client       @relation(fields: [clientId, organizationId], references: [id, organizationId], onDelete: Cascade)
+  payRun           PayRun       @relation(fields: [payRunId, organizationId], references: [id, organizationId], onDelete: Cascade)
+  sourceFile       SourceFile   @relation(fields: [sourceFileId], references: [id], onDelete: Cascade)
+
+  @@unique([sourceFileId, rowNumber])
+  @@index([organizationId, payRunId])
+  @@index([sourceFileId])
+}
+
+model PaymentRecord {
+  id                 String       @id @default(cuid())
+  organizationId     String
+  clientId           String
+  payRunId           String
+  sourceFileId       String
+  rowNumber          Int
+  employeeExternalId String
+  employeeName       String
+  paymentAmount      Decimal      @db.Decimal(18, 2)
+  paymentReference   String?
+  paymentDate        String?
+  createdAt          DateTime     @default(now())
+  organization       Organization @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  client             Client       @relation(fields: [clientId, organizationId], references: [id, organizationId], onDelete: Cascade)
+  payRun             PayRun       @relation(fields: [payRunId, organizationId], references: [id, organizationId], onDelete: Cascade)
+  sourceFile         SourceFile   @relation(fields: [sourceFileId], references: [id], onDelete: Cascade)
+
+  @@unique([sourceFileId, rowNumber])
+  @@index([organizationId, payRunId])
+  @@index([sourceFileId])
+}
+
+model ReconciliationCheck {
+  id               String                    @id @default(cuid())
+  organizationId   String
+  clientId         String
+  payRunId         String
+  sourceFileId     String
+  checkKind        ReconciliationCheckKind
+  status           ReconciliationCheckStatus
+  payrollAmount    Decimal                   @db.Decimal(18, 2)
+  comparisonAmount Decimal                   @db.Decimal(18, 2)
+  varianceAmount   Decimal                   @db.Decimal(18, 2)
+  toleranceAmount  Decimal                   @db.Decimal(18, 2)
+  details          Json?
+  createdAt        DateTime                  @default(now())
+  updatedAt        DateTime                  @updatedAt
+  organization     Organization              @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  client           Client                    @relation(fields: [clientId, organizationId], references: [id, organizationId], onDelete: Cascade)
+  payRun           PayRun                    @relation(fields: [payRunId, organizationId], references: [id, organizationId], onDelete: Cascade)
+  sourceFile       SourceFile                @relation(fields: [sourceFileId], references: [id], onDelete: Cascade)
+
+  @@unique([sourceFileId, checkKind])
+  @@index([organizationId, payRunId, status])
+  @@index([clientId, payRunId, checkKind])
 }
