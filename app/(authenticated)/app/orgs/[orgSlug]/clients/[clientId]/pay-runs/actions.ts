@@ -15,10 +15,14 @@ import {
   registerSourceFileForPayRun,
 } from "@/lib/pay-runs/service";
 import { SOURCE_FILE_KINDS } from "@/lib/pay-runs/source-files";
+import { recordPayRunApprovalEvent } from "@/lib/review/approval";
 import { createSupabaseServerClient } from "@/lib/supabase/server";
 import { findClientForOrganization } from "@/lib/clients/service";
 import { readSourceFilesBucket } from "@/lib/env";
-import { canManagePayRuns } from "@/lib/tenancy/access";
+import {
+  canManageApprovalActions,
+  canManagePayRuns,
+} from "@/lib/tenancy/access";
 import { findOrganizationContextForUser } from "@/lib/tenancy/service";
 
 const payRunSchema = z
@@ -44,11 +48,88 @@ const sourceFileRegistrationSchema = z.object({
   checksumSha256: z.string().trim().min(32).max(128),
 });
 
+const approvalActionSchema = z.object({
+  action: z.enum(["approve", "reject", "reopen", "submit"]),
+  note: z.preprocess(
+    (value) => (typeof value === "string" ? value : undefined),
+    z.string().trim().max(2_000).optional(),
+  ),
+});
+
+async function requirePayRunContext(
+  orgSlug: string,
+  clientId: string,
+  payRunId: string,
+) {
+  const user = await requireAuthenticatedUser();
+  const organizationContext = await findOrganizationContextForUser(
+    user.id,
+    orgSlug,
+  );
+
+  if (!organizationContext) {
+    return {
+      error: "Organization access denied.",
+      ok: false as const,
+    };
+  }
+
+  const client = await findClientForOrganization({
+    organizationId: organizationContext.organization.id,
+    clientId,
+  });
+
+  if (!client) {
+    return {
+      error: "Client access denied.",
+      ok: false as const,
+    };
+  }
+
+  const payRun = await findPayRunForClient({
+    organizationId: organizationContext.organization.id,
+    clientId: client.id,
+    payRunId,
+  });
+
+  if (!payRun) {
+    return {
+      error: "Pay run access denied.",
+      ok: false as const,
+    };
+  }
+
+  return {
+    client,
+    ok: true as const,
+    organizationContext,
+    payRun,
+    user,
+  };
+}
+
 async function requireMutablePayRunContext(
   orgSlug: string,
   clientId: string,
   payRunId?: string,
 ) {
+  if (payRunId) {
+    const context = await requirePayRunContext(orgSlug, clientId, payRunId);
+
+    if (!context.ok) {
+      return context;
+    }
+
+    if (!canManagePayRuns(context.organizationContext.role)) {
+      return {
+        error: "Your role cannot change pay runs.",
+        ok: false as const,
+      };
+    }
+
+    return context;
+  }
+
   const user = await requireAuthenticatedUser();
   const organizationContext = await findOrganizationContextForUser(
     user.id,
@@ -78,29 +159,6 @@ async function requireMutablePayRunContext(
     return {
       error: "Client access denied.",
       ok: false as const,
-    };
-  }
-
-  if (payRunId) {
-    const payRun = await findPayRunForClient({
-      organizationId: organizationContext.organization.id,
-      clientId: client.id,
-      payRunId,
-    });
-
-    if (!payRun) {
-      return {
-        error: "Pay run access denied.",
-        ok: false as const,
-      };
-    }
-
-    return {
-      client,
-      ok: true as const,
-      organizationContext,
-      payRun,
-      user,
     };
   }
 
@@ -174,7 +232,7 @@ export async function registerSourceFileUploadAction(
     };
   }
 
-  if (!context.payRun) {
+  if (!("payRun" in context)) {
     return {
       error: "Pay run access denied.",
       ok: false as const,
@@ -256,7 +314,7 @@ export async function confirmSourceFileUploadAction(
     };
   }
 
-  if (!context.payRun) {
+  if (!("payRun" in context)) {
     return {
       error: "Pay run access denied.",
       ok: false as const,
@@ -329,7 +387,7 @@ export async function saveSourceFileMappingAction(
     };
   }
 
-  if (!context.payRun) {
+  if (!("payRun" in context)) {
     return {
       error: "Pay run access denied.",
       ok: false as const,
@@ -384,4 +442,73 @@ export async function saveSourceFileMappingAction(
       : "Mapping saved for this upload.",
     ok: true as const,
   };
+}
+
+export async function recordPayRunApprovalEventAction(
+  orgSlug: string,
+  clientId: string,
+  payRunId: string,
+  formData: FormData,
+) {
+  const context = await requirePayRunContext(orgSlug, clientId, payRunId);
+
+  if (!context.ok) {
+    return {
+      error: context.error,
+      ok: false as const,
+    };
+  }
+
+  if (!canManageApprovalActions(context.organizationContext.role)) {
+    return {
+      error: "Your role cannot submit or approve pay runs.",
+      ok: false as const,
+    };
+  }
+
+  const parsed = approvalActionSchema.safeParse({
+    action: formData.get("action"),
+    note: formData.get("note"),
+  });
+
+  if (!parsed.success) {
+    return {
+      error: "Approval workflow input was invalid.",
+      ok: false as const,
+    };
+  }
+
+  try {
+    await recordPayRunApprovalEvent({
+      action: parsed.data.action,
+      actorRole: context.organizationContext.role,
+      actorUserId: context.user.id,
+      clientId: context.client.id,
+      note: parsed.data.note,
+      organizationId: context.organizationContext.organization.id,
+      payRunId: context.payRun.id,
+    });
+
+    revalidatePath(`/app/orgs/${orgSlug}/clients/${clientId}/pay-runs/${payRunId}`);
+
+    return {
+      notice:
+        parsed.data.action === "submit"
+          ? "Pay run submitted for approval."
+          : parsed.data.action === "approve"
+            ? "Pay run approved."
+            : parsed.data.action === "reject"
+              ? "Pay run rejected back to review."
+              : "Pay run reopened for review.",
+      ok: true as const,
+    };
+  } catch (error) {
+    return {
+      error:
+        error instanceof Error
+          ? error.message
+          : "Approval workflow update failed.",
+      ok: false as const,
+    };
+  }
 }

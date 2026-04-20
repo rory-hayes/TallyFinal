@@ -3,6 +3,7 @@ import { describe, expect, it } from "vitest";
 import {
   assertClientBelongsToOrganization,
   assertPayRunBelongsToOrganization,
+  canManageApprovalActions,
   canManageClients,
   canManagePayRuns,
   getDefaultOrganizationMembership,
@@ -46,6 +47,18 @@ describe("canManagePayRuns", () => {
   it("blocks reviewers and viewers from mutating pay runs", () => {
     expect(canManagePayRuns("reviewer")).toBe(false);
     expect(canManagePayRuns("viewer")).toBe(false);
+  });
+});
+
+describe("canManageApprovalActions", () => {
+  it("allows reviewers and admins to submit or approve pay runs", () => {
+    expect(canManageApprovalActions("admin")).toBe(true);
+    expect(canManageApprovalActions("reviewer")).toBe(true);
+  });
+
+  it("blocks operators and viewers from approval actions", () => {
+    expect(canManageApprovalActions("operator")).toBe(false);
+    expect(canManageApprovalActions("viewer")).toBe(false);
   });
 });
 
