@@ -3,6 +3,7 @@ import { notFound, redirect } from "next/navigation";
 
 import { SourceFileMappingForm } from "@/components/pay-runs/source-file-mapping-form";
 import { SourceFileUploadForm } from "@/components/pay-runs/source-file-upload-form";
+import { PayRunApprovalPanel } from "@/components/review/pay-run-approval-panel";
 import { ReviewQueueWorkspace } from "@/components/review/review-queue-workspace";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
@@ -29,8 +30,12 @@ import {
   listPayRunsForClient,
 } from "@/lib/pay-runs/service";
 import { formatSourceFileKindLabel } from "@/lib/pay-runs/source-files";
+import { getPayRunApprovalSummary } from "@/lib/review/approval";
 import { listReviewExceptions } from "@/lib/review/exceptions";
-import { canManagePayRuns } from "@/lib/tenancy/access";
+import {
+  canManageApprovalActions,
+  canManagePayRuns,
+} from "@/lib/tenancy/access";
 import {
   findOrganizationContextForUser,
   listOrganizationReviewAssignees,
@@ -38,6 +43,7 @@ import {
 
 import {
   confirmSourceFileUploadAction,
+  recordPayRunApprovalEventAction,
   registerSourceFileUploadAction,
   saveSourceFileMappingAction,
 } from "../actions";
@@ -92,7 +98,13 @@ export default async function PayRunDetailPage({
     notFound();
   }
 
-  const [payRuns, importWorkspaces, reviewExceptions, reviewAssignees] =
+  const [
+    payRuns,
+    importWorkspaces,
+    reviewExceptions,
+    reviewAssignees,
+    approvalSummary,
+  ] =
     await Promise.all([
       listPayRunsForClient({
         organizationId: organizationContext.organization.id,
@@ -108,11 +120,17 @@ export default async function PayRunDetailPage({
         payRunId: payRun.id,
       }),
       listOrganizationReviewAssignees(organizationContext.organization.id),
+      getPayRunApprovalSummary({
+        clientId: client.id,
+        organizationId: organizationContext.organization.id,
+        payRunId: payRun.id,
+      }),
     ]);
   const sourceFilesById = new Map(
     payRun.sourceFiles.map((sourceFile) => [sourceFile.id, sourceFile]),
   );
   const payRunManagementAllowed = canManagePayRuns(organizationContext.role);
+  const payRunApprovalAllowed = canManageApprovalActions(organizationContext.role);
 
   return (
     <div className="space-y-6">
@@ -124,6 +142,9 @@ export default async function PayRunDetailPage({
             </h1>
             <Badge variant="outline" className="rounded-md capitalize">
               {formatStatus(payRun.status)}
+            </Badge>
+            <Badge variant="outline" className="rounded-md capitalize">
+              {approvalSummary.currentState.replace(/_/g, " ")}
             </Badge>
           </div>
           <p className="text-sm text-muted-foreground">
@@ -150,6 +171,17 @@ export default async function PayRunDetailPage({
           </Button>
         </div>
       </section>
+
+      <PayRunApprovalPanel
+        canManageApprovalActions={payRunApprovalAllowed}
+        recordApprovalAction={recordPayRunApprovalEventAction.bind(
+          null,
+          orgSlug,
+          client.id,
+          payRun.id,
+        )}
+        summary={approvalSummary}
+      />
 
       <ReviewQueueWorkspace
         assignees={reviewAssignees}
